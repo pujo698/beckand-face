@@ -99,7 +99,7 @@ class AdminController extends Controller
             $path = $request->file('photo')->store('photos', 'public');
             $user->update(['photo' => $path]);
 
-            // --- BAGIAN INTEGRASI PYTHON DINONAKTIFKAN ---
+            // --- BAGIAN INTEGRASI PYTHON ---
             
             try {
                 $photoContents = file_get_contents($request->file('photo')->getRealPath());
@@ -124,6 +124,6 @@ class AdminController extends Controller
         }
         $user->delete();
         // Disarankan: buat endpoint di Python untuk menghapus encoding juga
-        return response()->json(['message' => 'Karyawan berhasil dihapus']);
+        return response()->json(['message' => 'Karyawan berhasil dihapus lho']);
     }
 }

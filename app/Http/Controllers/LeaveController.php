@@ -46,7 +46,10 @@ class LeaveController extends Controller
      */
     public function approve(LeaveRequest $leaveRequest)
     {
-        $leaveRequest->update(['status' => 'approved']);
+        $leaveRequest->update([
+            'status' => 'approved',
+            'approved_by' => Auth::id(),
+        ]);
         return response()->json(['message' => 'Permohonan izin disetujui.', 'data' => $leaveRequest]);
     }
 
@@ -55,7 +58,10 @@ class LeaveController extends Controller
      */
     public function reject(LeaveRequest $leaveRequest)
     {
-        $leaveRequest->update(['status' => 'rejected']);
+        $leaveRequest->update([
+            'status' => 'rejected',
+            'approved_by' => Auth::id(),
+        ]);
         return response()->json(['message' => 'Permohonan izin ditolak.', 'data' => $leaveRequest]);
     }
 }

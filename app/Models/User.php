@@ -95,4 +95,10 @@ class User extends Authenticatable
     {
         return $this->hasMany(UserSchedule::class);
     }
+
+    // Relasi ke Task (many-to-many)
+    public function tasks()
+    {
+        return $this->belongsToMany(Task::class)->withPivot('status')->withTimestamps();
+    }
 }

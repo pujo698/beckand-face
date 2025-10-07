@@ -10,6 +10,8 @@ use App\Http\Controllers\LeaveController;
 use App\Http\Controllers\OvertimeController;
 use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\ShiftController;
+use App\Http\Controllers\ReportController;
+use App\Http\Controllers\TaskController;
 
 // Endpoint publik (tidak butuh token)
 Route::post('/login', [AuthController::class, 'login']);
@@ -54,6 +56,12 @@ Route::middleware('auth:sanctum')->group(function () {
         // Kelola Jadwal Kerja
         Route::post('/schedules', [ScheduleController::class, 'store']);
         Route::delete('/schedules/user/{user}/date/{date}', [ScheduleController::class, 'destroy']);
+
+        // laporan 
+        Route::get('/reports/attendance', [ReportController::class, 'exportAttendance']);
+        
+        // Kelola Tugas
+        Route::post('/tasks', [TaskController::class, 'store']);
     });
 
     // ==============================
@@ -73,7 +81,12 @@ Route::middleware('auth:sanctum')->group(function () {
         
         // Ajukan Lembur 
         Route::post('/overtimes', [OvertimeController::class, 'store']);
+
         // Lihat jadwal kerja
         Route::get('/schedules', [ScheduleController::class, 'index']);
+
+        // Lihat tugas saya
+        Route::get('/tasks', [TaskController::class, 'myTasks']);
+        Route::put('/tasks/{task}/status', [TaskController::class, 'updateTaskStatus']);
     });
 });

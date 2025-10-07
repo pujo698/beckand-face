@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use App\Models\UserSchedule;
+
 
 class AttendanceController extends Controller
 {
@@ -44,6 +46,13 @@ class AttendanceController extends Controller
         if ($user->attendanceLogs()->whereDate('check_in', Carbon::today())->exists()) {
             return response()->json(['message' => 'Anda sudah melakukan check-in hari ini.'], 409);
         }
+        $todaySchedule = UserSchedule::where('user_id', $user->id)
+            ->where('date', Carbon::today())
+            ->with('shift')->first();
+
+        if (!$todaySchedule) {
+            return response()->json(['message' => 'Anda tidak memiliki jadwal kerja hari ini.'], 403);
+        }
 
         $response = $this->verifyFace($request);
         if ($response === null) {
@@ -54,7 +63,7 @@ class AttendanceController extends Controller
         }
         
         // Tentukan batas waktu masuk (jam 8 pagi)
-        $entryDeadline = Carbon::today()->setHour(8)->setMinute(0);
+        $entryDeadline = Carbon::parse($todaySchedule->shift->start_time);
         $currentTime = now();
         $status = ($currentTime->isAfter($entryDeadline)) ? 'Terlambat' : 'Tepat Waktu';
 

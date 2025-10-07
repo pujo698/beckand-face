@@ -16,6 +16,7 @@ class LeaveController extends Controller
         $request->validate([
             'reason' => 'required|string',
             'duration' => 'required|string',
+            'type' => 'nullable|in:izin,cuti,sakit',
             'support_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
         ]);
 
@@ -27,6 +28,7 @@ class LeaveController extends Controller
         $leaveRequest = Auth::user()->leaveRequests()->create([
             'reason' => $request->reason,
             'duration' => $request->duration,
+            'type' => $request->type ?? 'izin',
             'support_file' => $path,
         ]);
 

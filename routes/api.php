@@ -7,6 +7,9 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\LeaveController;
+use App\Http\Controllers\OvertimeController;
+use App\Http\Controllers\ScheduleController;
+use App\Http\Controllers\ShiftController;
 
 // Endpoint publik (tidak butuh token)
 Route::post('/login', [AuthController::class, 'login']);
@@ -32,10 +35,25 @@ Route::middleware('auth:sanctum')->group(function () {
         // Log absensi
         Route::get('/attendance-logs', [AttendanceController::class, 'logs']);
         
-        // Permintaan cuti (approve/reject)
+        // Permintaan izin cuti (approve/reject)
         Route::get('/leave-requests', [LeaveController::class, 'index']);
         Route::put('/leave-requests/{leaveRequest}/approve', [LeaveController::class, 'approve']);
         Route::put('/leave-requests/{leaveRequest}/reject', [LeaveController::class, 'reject']);
+
+        // Pengajuan lembur (approve/reject)
+        Route::get('/overtimes', [OvertimeController::class, 'index']);
+        Route::put('/overtimes/{overtime}/approve', [OvertimeController::class, 'approve']);
+        Route::put('/overtimes/{overtime}/reject', [OvertimeController::class, 'reject']);
+
+        // Kelola Shift
+        Route::get('/shifts', [ShiftController::class, 'index']);
+        Route::post('/shifts', [ShiftController::class, 'store']);
+        Route::put('/shifts/{shift}', [ShiftController::class, 'update']);
+        Route::delete('/shifts/{shift}', [ShiftController::class, 'destroy']);
+
+        // Kelola Jadwal Kerja
+        Route::post('/schedules', [ScheduleController::class, 'store']);
+        Route::delete('/schedules/user/{user}/date/{date}', [ScheduleController::class, 'destroy']);
     });
 
     // ==============================
@@ -50,7 +68,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/check-in', [AttendanceController::class, 'checkIn']);
         Route::post('/check-out', [AttendanceController::class, 'checkOut']);
         
-        // Ajukan cuti
+        // Ajukan izin cuti
         Route::post('/leave-request', [LeaveController::class, 'store']);
+        
+        // Ajukan Lembur 
+        Route::post('/overtimes', [OvertimeController::class, 'store']);
+        // Lihat jadwal kerja
+        Route::get('/schedules', [ScheduleController::class, 'index']);
     });
 });

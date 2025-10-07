@@ -84,4 +84,15 @@ class User extends Authenticatable
     {
         return $this->hasMany(LeaveRequest::class);
     }
+
+    // Relasi ke Overtime
+    public function overtimes()
+    {
+        return $this->hasMany(Overtime::class);
+    }
+    // Relasi ke UserSchedule
+    public function userSchedules()
+    {
+        return $this->hasMany(UserSchedule::class);
+    }
 }

@@ -39,6 +39,7 @@ class LeaveRequest extends Model
         'support_file',
         'duration',
         'status',
+        'type',
     ];
 
     // Relasi ke User

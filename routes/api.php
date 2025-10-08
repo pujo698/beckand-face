@@ -31,6 +31,8 @@ Route::middleware('auth:sanctum')->group(function () {
         // Kelola User
         Route::get('/users', [AdminController::class, 'index']);
         Route::post('/users', [AdminController::class, 'store']);
+        // BARU: Menampilkan data user tunggal berdasarkan ID
+        Route::get('/users/{user}', [AdminController::class, 'show']);
         Route::put('/users/{user}', [AdminController::class, 'update']);
         Route::delete('/users/{user}', [AdminController::class, 'destroy']);
         

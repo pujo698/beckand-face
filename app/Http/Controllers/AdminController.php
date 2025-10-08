@@ -126,4 +126,14 @@ class AdminController extends Controller
         // Disarankan: buat endpoint di Python untuk menghapus encoding juga
         return response()->json(['message' => 'Karyawan berhasil dihapus lho']);
     }
+
+    /**
+     * Menampilkan data user spesifik.
+     */
+    public function show(User $user)
+    {
+        // Laravel akan otomatis mencari user berdasarkan ID di URL.
+        // Cukup kembalikan user tersebut sebagai JSON.
+        return response()->json($user);
+    }
 }

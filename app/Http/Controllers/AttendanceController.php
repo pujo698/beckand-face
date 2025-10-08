@@ -46,13 +46,36 @@ class AttendanceController extends Controller
         if ($user->attendanceLogs()->whereDate('check_in', Carbon::today())->exists()) {
             return response()->json(['message' => 'Anda sudah melakukan check-in hari ini.'], 409);
         }
+
+        // ===================================================================
+        // ===            AWAL DARI BAGIAN YANG DIUBAH                     ===
+        // ===================================================================
+
         $todaySchedule = UserSchedule::where('user_id', $user->id)
             ->where('date', Carbon::today())
             ->with('shift')->first();
 
-        if (!$todaySchedule) {
-            return response()->json(['message' => 'Anda tidak memiliki jadwal kerja hari ini.'], 403);
+        $status = 'Tepat Waktu'; // Nilai default
+
+        if ($todaySchedule) {
+            // LOGIKA UNTUK FRONTEND BARU (JIKA KARYAWAN PUNYA JADWAL)
+            $entryDeadline = Carbon::parse($todaySchedule->shift->start_time);
+            if (now()->isAfter($entryDeadline)) {
+                $status = 'Terlambat';
+            }
+        } else {
+            // LOGIKA LAMA (JIKA KARYAWAN TIDAK PUNYA JADWAL)
+            // Anda bisa menghapus blok ini jika sudah tidak diperlukan lagi
+            // Atau biarkan untuk mendukung karyawan tanpa shift / frontend lama
+            $entryDeadline = Carbon::today()->setHour(8)->setMinute(0);
+            if (now()->isAfter($entryDeadline)) {
+                $status = 'Terlambat';
+            }
         }
+
+        // ===================================================================
+        // ===             AKHIR DARI BAGIAN YANG DIUBAH                   ===
+        // ===================================================================
 
         $response = $this->verifyFace($request);
         if ($response === null) {
@@ -62,15 +85,10 @@ class AttendanceController extends Controller
             return response()->json(['message' => 'Verifikasi wajah gagal.', 'details' => $response->json()], 401);
         }
         
-        // Tentukan batas waktu masuk (jam 8 pagi)
-        $entryDeadline = Carbon::parse($todaySchedule->shift->start_time);
-        $currentTime = now();
-        $status = ($currentTime->isAfter($entryDeadline)) ? 'Terlambat' : 'Tepat Waktu';
-
         $log = AttendanceLog::create([
             'user_id' => $user->id,
-            'check_in' => $currentTime,
-            'status' => $status
+            'check_in' => now(),
+            'status' => $status // Menggunakan status yang sudah ditentukan
         ]);
         
         return response()->json(['message' => 'Check-in berhasil. Status: ' . $status, 'data' => $log], 201);

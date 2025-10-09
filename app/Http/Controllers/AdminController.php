@@ -33,25 +33,29 @@ class AdminController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'phone' => 'nullable|string',
-            'password' => 'required|string|min:8',
-            'photo' => 'required|image|mimes:jpeg,png,jpg|max:2048',
+            'name'       => 'required|string|max:255',
+            'email'      => 'required|string|email|max:255|unique:users',
+            'position'   => 'required|string|max:255',         // <-- BARIS DITAMBAHKAN
+            'status'     => 'required|in:active,inactive',     // <-- BARIS DITAMBAHKAN
+            'phone'      => 'nullable|string',
+            'password'   => 'required|string|min:8',
+            'photo'      => 'required|image|mimes:jpeg,png,jpg|max:2048',
         ]);
 
         $path = $request->file('photo')->store('photos', 'public');
 
         $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'phone' => $request->phone,
-            'password' => Hash::make($request->password),
-            'role' => 'employee',
-            'photo' => $path,
+            'name'       => $request->name,
+            'email'      => $request->email,
+            'phone'      => $request->phone,
+            'password'   => Hash::make($request->password),
+            'role'       => 'employee',
+            'position'   => $request->position,                // <-- BARIS DITAMBAHKAN
+            'status'     => $request->status,                  // <-- BARIS DITAMBAHKAN
+            'photo'      => $path,
         ]);
 
-        // --- BAGIAN INTEGRASI PYTHON DINONAKTIFKAN ---
+        // --- BAGIAN INTEGRASI PYTHON ---
         
         try {
             $photoContents = file_get_contents($request->file('photo')->getRealPath());
@@ -75,7 +79,6 @@ class AdminController extends Controller
             return response()->json(['message' => 'Tidak dapat terhubung ke layanan verifikasi'], 503);
         }
         
-
         return response()->json($user, 201);
     }
 
@@ -85,12 +88,15 @@ class AdminController extends Controller
     public function update(Request $request, User $user)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
-            'phone' => 'nullable|string',
+            'name'     => 'required|string|max:255',
+            'email'    => 'required|string|email|max:255|unique:users,email,' . $user->id,
+            'position' => 'required|string|max:255',         // <-- BARIS DITAMBAHKAN
+            'status'   => 'required|in:active,inactive',     // <-- BARIS DITAMBAHKAN
+            'phone'    => 'nullable|string',
         ]);
 
-        $user->update($request->only(['name', 'email', 'phone']));
+        // <-- BAGIAN DIUBAH: Tambahkan 'position' dan 'status' ke update -->
+        $user->update($request->only(['name', 'email', 'phone', 'position', 'status']));
 
         // Jika ada foto baru, update juga di Laravel
         if ($request->hasFile('photo')) {
@@ -108,7 +114,6 @@ class AdminController extends Controller
             } catch (\Exception $e) {
                 Log::warning('Gagal mengupdate data wajah di API Python: ' . $e->getMessage());
             }
-            
         }
 
         return response()->json($user);
@@ -124,7 +129,7 @@ class AdminController extends Controller
         }
         $user->delete();
         // Disarankan: buat endpoint di Python untuk menghapus encoding juga
-        return response()->json(['message' => 'Karyawan berhasil dihapus lho']);
+        return response()->json(['message' => 'Karyawan berhasil dihapus.']);
     }
 
     /**
@@ -132,8 +137,6 @@ class AdminController extends Controller
      */
     public function show(User $user)
     {
-        // Laravel akan otomatis mencari user berdasarkan ID di URL.
-        // Cukup kembalikan user tersebut sebagai JSON.
         return response()->json($user);
     }
 }

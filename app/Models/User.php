@@ -58,6 +58,8 @@ class User extends Authenticatable
         'phone',
         'password',
         'role',
+        'position',
+        'status',
         'photo',
     ];
 

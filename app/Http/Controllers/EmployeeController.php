@@ -4,19 +4,20 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
 class EmployeeController extends Controller
 {
+    /*
+    // --- DIKOMENTARI: Bagian Python tidak lagi digunakan ---
     protected $pythonApiUrl;
 
     public function __construct()
     {
         $this->pythonApiUrl = env('PYTHON_API_URL', 'http://127.0.0.1:5000');
     }
+    */
 
     /**
      * Menampilkan data profil karyawan yang login & status absensi hari ini.
@@ -40,26 +41,34 @@ class EmployeeController extends Controller
     {
         $user = Auth::user();
         $request->validate([
-            'name' => 'sometimes|string|max:255',
+            'name'  => 'sometimes|string|max:255',
             'phone' => 'sometimes|nullable|string',
             'photo' => 'sometimes|image|mimes:jpeg,png,jpg|max:2048',
         ]);
 
         $userData = $request->only(['name', 'phone']);
 
+        // DIAKTIFKAN KEMBALI: Logika untuk menyimpan foto tetap berjalan.
         if ($request->hasFile('photo')) {
-            if ($user->photo) Storage::disk('public')->delete($user->photo);
+            // Hapus foto lama jika ada
+            if ($user->photo) {
+                Storage::disk('public')->delete($user->photo);
+            }
+            // Simpan foto baru
             $path = $request->file('photo')->store('photos', 'public');
             $userData['photo'] = $path;
-
-            try {
-                $photoContents = file_get_contents($request->file('photo')->getRealPath());
-                Http::attach('file', $photoContents, $request->file('photo')->getClientOriginalName())
-                    ->asMultipart()->post($this->pythonApiUrl . '/api/register_face', ['user_id' => $user->id]);
-            } catch (\Exception $e) {
-                Log::warning('Gagal mengupdate data wajah di API Python: ' . $e->getMessage());
-            }
         }
+
+        /*
+        // DIKOMENTARI: Bagian yang terhubung ke Python tetap nonaktif.
+        try {
+            $photoContents = file_get_contents($request->file('photo')->getRealPath());
+            Http::attach('file', $photoContents, $request->file('photo')->getClientOriginalName())
+                ->asMultipart()->post($this->pythonApiUrl . '/api/register_face', ['user_id' => $user->id]);
+        } catch (\Exception $e) {
+            Log::warning('Gagal mengupdate data wajah di API Python: ' . $e->getMessage());
+        }
+        */
 
         $user->update($userData);
         return response()->json(['message' => 'Profil berhasil diperbarui', 'user' => $user]);

@@ -86,6 +86,8 @@ Route::middleware('auth:sanctum')->group(function () {
         
         // Ajukan izin cuti
         Route::post('/leave-request', [LeaveController::class, 'store']);
+        Route::get('/leave-requests/history', [LeaveController::class, 'history']);
+        Route::get('/leave-requests/{leaveRequest}', [LeaveController::class, 'show']);
         
         // Ajukan Lembur 
         Route::post('/overtimes', [OvertimeController::class, 'store']);

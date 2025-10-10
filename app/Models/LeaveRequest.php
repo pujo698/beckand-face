@@ -40,11 +40,18 @@ class LeaveRequest extends Model
         'duration',
         'status',
         'type',
+        'approved_by',
     ];
 
     // Relasi ke User
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    // Relasi ke User yang menyetujui/menolak (approver)
+    public function approver()
+    {
+        return $this->belongsTo(User::class, 'approved_by');
     }
 }

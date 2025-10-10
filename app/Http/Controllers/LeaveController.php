@@ -35,6 +35,39 @@ class LeaveController extends Controller
         return response()->json(['message' => 'Permohonan izin berhasil diajukan.', 'data' => $leaveRequest], 201);
     }
 
+    // ===================================================================
+    // ===            AWAL DARI BAGIAN YANG DITAMBAHKAN                ===
+    // ===================================================================
+
+    /**
+     * Karyawan melihat riwayat permohonan izin miliknya.
+     */
+    public function history()
+    {
+        return Auth::user()->leaveRequests()->latest()->get();
+    }
+
+    /**
+     * Karyawan melihat detail satu permohonan izin.
+     */
+    public function show(LeaveRequest $leaveRequest)
+    {
+        // Keamanan: Pastikan karyawan hanya bisa melihat izin miliknya sendiri
+        if ($leaveRequest->user_id !== Auth::id()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        // Memuat data relasi admin yang menyetujui/menolak (approver)
+        $leaveRequest->load('approver:id,name');
+
+        return response()->json($leaveRequest);
+    }
+
+    // ===================================================================
+    // ===             AKHIR DARI BAGIAN YANG DITAMBAHKAN              ===
+    // ===================================================================
+
+
     /**
      * Admin melihat semua permohonan izin.
      */

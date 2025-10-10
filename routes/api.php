@@ -12,6 +12,7 @@ use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\TaskController;
+use App\Http\Controllers\OnDutyAuthorizationController;
 
 // Endpoint publik (tidak butuh token)
 Route::post('/login', [AuthController::class, 'login']);
@@ -64,7 +65,12 @@ Route::middleware('auth:sanctum')->group(function () {
         
         // Kelola Tugas
         Route::post('/tasks', [TaskController::class, 'store']);
-    });
+
+        // Kelola Izin Dinas Luar
+        Route::get('/on-duty-authorizations', [OnDutyAuthorizationController::class, 'index']);
+        Route::post('/on-duty-authorizations', [OnDutyAuthorizationController::class, 'store']);
+        Route::delete('/on-duty-authorizations/{onDutyAuthorization}', [OnDutyAuthorizationController::class, 'destroy']);
+    }); 
 
     // ==============================
     // 🔹 Rute khusus Employee

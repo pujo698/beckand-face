@@ -3,37 +3,46 @@
 namespace App\Http\Controllers;
 
 use App\Models\AttendanceLog;
+use App\Models\OnDutyAuthorization;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 use App\Models\UserSchedule;
-use App\Traits\Haversine; // Pastikan Trait ini sudah Anda buat
+use App\Traits\Haversine;
 
 class AttendanceController extends Controller
 {
-    use Haversine; // Menggunakan Trait perhitungan jarak
+    use Haversine;
 
     public function checkIn(Request $request)
     {
-        // DIAKTIFKAN: Validasi lokasi sekarang wajib
         $request->validate([
             'latitude'  => 'required|numeric',
             'longitude' => 'required|numeric',
         ]);
 
         $user = Auth::user();
+
+        // Cek apakah karyawan punya izin dinas luar yang aktif untuk hari ini
+        $hasOnDutyAuth = OnDutyAuthorization::where('user_id', $user->id)
+            ->where('start_date', '<=', now()->toDateString())
+            ->where('end_date', '>=', now()->toDateString())
+            ->exists();
         
-        // Logika Geofencing untuk memeriksa lokasi
-        $officeLat = env('OFFICE_LATITUDE');
-        $officeLon = env('OFFICE_LONGITUDE');
-        $allowedRadius = env('ALLOWED_RADIUS_METERS');
+        // Jika TIDAK punya izin dinas, maka jalankan pemeriksaan lokasi
+        if (!$hasOnDutyAuth) {
+            
+            $officeLat = env('OFFICE_LATITUDE');
+            $officeLon = env('OFFICE_LONGITUDE');
+            $allowedRadius = env('ALLOWED_RADIUS_METERS');
 
-        $distance = $this->calculateDistance(
-            $request->latitude, $request->longitude, $officeLat, $officeLon
-        );
+            $distance = $this->calculateDistance(
+                $request->latitude, $request->longitude, $officeLat, $officeLon
+            );
 
-        if ($distance > $allowedRadius) {
-            return response()->json(['message' => 'Anda berada di luar radius lokasi kerja yang diizinkan.'], 403);
+            if ($distance > $allowedRadius) {
+                return response()->json(['message' => 'Anda berada di luar radius lokasi kerja yang diizinkan.'], 403);
+            }
         }
 
         if ($user->attendanceLogs()->whereDate('check_in', Carbon::today())->exists()) {
@@ -61,8 +70,8 @@ class AttendanceController extends Controller
         $log = $user->attendanceLogs()->create([
             'check_in'  => now(),
             'status'    => $status,
-            'latitude'  => $request->latitude,   // Menyimpan bukti lokasi
-            'longitude' => $request->longitude,  // Menyimpan bukti lokasi
+            'latitude'  => $request->latitude,
+            'longitude' => $request->longitude,
         ]);
         
         return response()->json(['message' => 'Check-in berhasil. Status: ' . $status, 'data' => $log], 201);

@@ -28,9 +28,20 @@ class EmployeeController extends Controller
         $attendanceToday = $user->attendanceLogs()
             ->whereDate('check_in', Carbon::today())->first();
 
+        $duration = null;
+        // Hitung durasi hanya jika sudah check-in dan check-out
+        if ($attendanceToday && $attendanceToday->check_out) {
+            $checkInTime = Carbon::parse($attendanceToday->check_in);
+            $checkOutTime = Carbon::parse($attendanceToday->check_out);
+            
+            // Menghitung selisih waktu dan memformatnya
+            $duration = $checkInTime->diff($checkOutTime)->format('%h jam %i menit');
+        }
+
         return response()->json([
             'user' => $user,
-            'attendance_status_today' => $attendanceToday
+            'attendance_status_today' => $attendanceToday,
+            'duration_today' => $duration // <-- Data baru untuk durasi kerja
         ]);
     }
 
@@ -72,5 +83,39 @@ class EmployeeController extends Controller
 
         $user->update($userData);
         return response()->json(['message' => 'Profil berhasil diperbarui', 'user' => $user]);
+    }
+    /**
+     * Menghitung statistik bulanan untuk karyawan.
+     */
+    public function monthlyStats(Request $request)
+    {
+        $user = Auth::user();
+        $month = $request->query('month', now()->month);
+        $year = $request->query('year', now()->year);
+
+        // Menghitung jumlah hari terlambat
+        $lateDays = $user->attendanceLogs()
+            ->whereMonth('check_in', $month)
+            ->whereYear('check_in', $year)
+            ->where('status', 'Terlambat')
+            ->count();
+        
+        // Menghitung jumlah hari cuti/sakit/izin yang disetujui
+        $leaveDays = $user->leaveRequests()
+            ->whereMonth('created_at', $month)
+            ->whereYear('created_at', $year)
+            ->where('status', 'approved')
+            ->count();
+            
+        // Logika untuk Alfa (tidak absen padahal ada jadwal) lebih kompleks,
+        // untuk sementara kita beri nilai statis.
+        $absentDays = 1; // Contoh
+
+        return response()->json([
+            'terlambat' => $lateDays,
+            'cuti' => $leaveDays,
+            'alfa' => $absentDays,
+            'total_hari_kerja' => 22 // Contoh, bisa dibuat dinamis
+        ]);
     }
 }

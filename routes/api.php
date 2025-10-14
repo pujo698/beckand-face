@@ -79,6 +79,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Profil karyawan
         Route::get('/profile', [EmployeeController::class, 'profile']);
         Route::post('/profile', [EmployeeController::class, 'updateProfile']); // POST dipakai untuk update + upload file
+        Route::get('/stats', [EmployeeController::class, 'monthlyStats']);
         
         // Absensi
         Route::post('/check-in', [AttendanceController::class, 'checkIn']);

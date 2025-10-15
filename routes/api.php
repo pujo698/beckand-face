@@ -99,5 +99,8 @@ Route::middleware('auth:sanctum')->group(function () {
         // Lihat tugas saya
         Route::get('/tasks', [TaskController::class, 'myTasks']);
         Route::put('/tasks/{task}/status', [TaskController::class, 'updateTaskStatus']);
+       
+        // lihat riwayat absensi
+        Route::get('/attendances/history', [AttendanceController::class, 'history']);
     });
 });

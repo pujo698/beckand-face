@@ -94,4 +94,18 @@ class AttendanceController extends Controller
     {
         return AttendanceLog::with('user:id,name,email')->latest()->paginate(20);
     }
+    // Riwayat absensi user 
+    public function history(Request $request)
+    {
+        $request->validate([
+            'month' => 'required|integer|between:1,12',
+            'year'  => 'required|integer',
+        ]);
+
+        return Auth::user()->attendanceLogs()
+            ->whereMonth('check_in', $request->month)
+            ->whereYear('check_in', $request->year)
+            ->orderBy('check_in', 'asc')
+            ->get();
+    }
 }

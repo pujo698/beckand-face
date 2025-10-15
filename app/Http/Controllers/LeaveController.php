@@ -17,7 +17,7 @@ class LeaveController extends Controller
             'reason' => 'required|string',
             'duration' => 'required|string',
             'type' => 'nullable|in:izin,cuti,sakit',
-            'support_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
+            'support_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:2048',
         ]);
 
         $path = null;
@@ -42,9 +42,16 @@ class LeaveController extends Controller
     /**
      * Karyawan melihat riwayat permohonan izin miliknya.
      */
-    public function history()
+    public function history(Request $request)
     {
-        return Auth::user()->leaveRequests()->latest()->get();
+        $query = Auth::user()->leaveRequests()->latest();
+
+        // Tambahkan filter status jika ada parameter 'status' di URL
+        if ($request->has('status') && $request->status !== 'semua') {
+            $query->where('status', $request->status);
+        }
+
+        return $query->get();
     }
 
     /**

@@ -7,8 +7,10 @@ use App\Models\OnDutyAuthorization;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
+use Carbon\CarbonPeriod;
 use App\Models\UserSchedule;
 use App\Traits\Haversine;
+use App\Models\Holiday;
 
 class AttendanceController extends Controller
 {
@@ -107,5 +109,58 @@ class AttendanceController extends Controller
             ->whereYear('check_in', $request->year)
             ->orderBy('check_in', 'asc')
             ->get();
+    }
+
+    public function getAttendanceCalendar(Request $request)
+    {
+        $request->validate([
+            'month' => 'required|integer|between:1,12',
+            'year'  => 'required|integer',
+        ]);
+
+        $user = Auth::user();
+        $month = $request->month;
+        $year = $request->year;
+
+        // Ambil semua data relevan dalam satu bulan
+        $logs = $user->attendanceLogs()
+            ->whereMonth('check_in', $month)->whereYear('check_in', $year)->get()->keyBy(fn($log) => Carbon::parse($log->check_in)->format('Y-m-d'));
+
+        $leaves = $user->leaveRequests()->where('status', 'approved')->get();
+        $holidays = Holiday::whereMonth('date', $month)->whereYear('date', $year)->pluck('date')->map(fn($date) => Carbon::parse($date)->format('Y-m-d'))->flip();
+
+        $period = CarbonPeriod::create(Carbon::create($year, $month)->startOfMonth(), Carbon::create($year, $month)->endOfMonth());
+        $calendarData = [];
+
+        // Loop melalui setiap hari dalam sebulan untuk menentukan statusnya
+        foreach ($period as $date) {
+            $dateString = $date->format('Y-m-d');
+            $dayData = ['date' => $dateString, 'check_in' => null, 'check_out' => null, 'status' => null];
+
+            if ($logs->has($dateString)) {
+                $log = $logs[$dateString];
+                $dayData['check_in'] = $log->check_in;
+                $dayData['check_out'] = $log->check_out;
+                $dayData['status'] = $log->status; // 'Tepat Waktu' atau 'Terlambat'
+            } else if ($holidays->has($dateString) || $date->isWeekend()) {
+                $dayData['status'] = 'Libur';
+            } else {
+                $isOnLeave = $leaves->first(function ($leave) use ($date) {
+                    $range = explode(' - ', $leave->duration);
+                    if (count($range) == 2) {
+                        return $date->between(Carbon::parse($range[0]), Carbon::parse($range[1]));
+                    }
+                    return false;
+                });
+
+                if ($isOnLeave) {
+                    $dayData['status'] = $isOnLeave->type; // 'cuti' atau 'sakit' atau 'izin'
+                } else if ($date->isPast() || $date->isToday()) {
+                    $dayData['status'] = 'Alfa';
+                }
+            }
+            $calendarData[] = $dayData;
+        }
+        return response()->json($calendarData);
     }
 }

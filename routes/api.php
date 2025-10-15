@@ -13,6 +13,7 @@ use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\OnDutyAuthorizationController;
+use App\Http\Controllers\HolidayController;
 
 // Endpoint publik (tidak butuh token)
 Route::post('/login', [AuthController::class, 'login']);
@@ -70,6 +71,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/on-duty-authorizations', [OnDutyAuthorizationController::class, 'index']);
         Route::post('/on-duty-authorizations', [OnDutyAuthorizationController::class, 'store']);
         Route::delete('/on-duty-authorizations/{onDutyAuthorization}', [OnDutyAuthorizationController::class, 'destroy']);
+
+        // Kelola Hari Libur
+        Route::get('/holidays', [HolidayController::class, 'index']);
+        Route::post('/holidays', [HolidayController::class, 'store']);
+        Route::delete('/holidays/{holiday}', [HolidayController::class, 'destroy']);
     }); 
 
     // ==============================
@@ -102,5 +108,6 @@ Route::middleware('auth:sanctum')->group(function () {
        
         // lihat riwayat absensi
         Route::get('/attendances/history', [AttendanceController::class, 'history']);
+        Route::get('/attendances/calendar', [AttendanceController::class, 'getAttendanceCalendar']);
     });
 });

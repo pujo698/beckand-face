@@ -78,6 +78,17 @@ class User extends Authenticatable
         ];
     }
 
+    // Aksesor untuk mendapatkan URL foto
+    public function getPhotoUrlAttribute()
+    {
+        if ($this->photo) {
+            // Menggabungkan APP_URL dari config dengan path storage
+            return config('app.url') . Storage::url($this->photo);
+        }
+        // Jika tidak ada foto, kembalikan URL ke gambar default
+        return 'https://ui-avatars.com/api/?name=' . urlencode($this->name) . '&background=random';
+    }
+
     // Relasi ke AttendanceLog
     public function attendanceLogs()
     {
@@ -107,11 +118,5 @@ class User extends Authenticatable
         return $this->belongsToMany(Task::class)->withPivot('status')->withTimestamps();
     }
     // Aksesor untuk mendapatkan URL foto
-    public function getPhotoUrlAttribute()
-    {
-        if ($this->photo) {
-            return Storage::url($this->photo);
-        }
-        return null; 
-    }
+
 }

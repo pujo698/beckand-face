@@ -57,27 +57,31 @@ class AttendanceController extends Controller
             ->with('shift')->first();
 
         $status = 'Tepat Waktu';
+        $currentTime = now();
+
         if ($todaySchedule) {
-            $entryDeadline = Carbon::parse($todaySchedule->shift->start_time);
-            if (now()->isAfter($entryDeadline)) {
+            // Jika ada jadwal: Ambil jam masuk dan tambahkan 30 menit
+            $entryDeadline = Carbon::parse($todaySchedule->shift->start_time)->addMinutes(30);
+            if ($currentTime->isAfter($entryDeadline)) {
                 $status = 'Terlambat';
             }
         } else {
-            $entryDeadline = Carbon::today()->setHour(8)->setMinute(0);
-            if (now()->isAfter($entryDeadline)) {
+            // Jika tidak ada jadwal: Gunakan jam 8 pagi dan tambahkan 30 menit
+            $entryDeadline = Carbon::today()->setHour(8)->setMinute(30);
+            if ($currentTime->isAfter($entryDeadline)) {
                 $status = 'Terlambat';
             }
         }
-        
-        $log = $user->attendanceLogs()->create([
-            'check_in'  => now(),
-            'status'    => $status,
-            'latitude'  => $request->latitude,
-            'longitude' => $request->longitude,
-        ]);
-        
-        return response()->json(['message' => 'Check-in berhasil. Status: ' . $status, 'data' => $log], 201);
-    }
+            
+            $log = $user->attendanceLogs()->create([
+                'check_in'  => now(),
+                'status'    => $status,
+                'latitude'  => $request->latitude,
+                'longitude' => $request->longitude,
+            ]);
+            
+            return response()->json(['message' => 'Check-in berhasil. Status: ' . $status, 'data' => $log], 201);
+        }
 
     public function checkOut(Request $request)
     {

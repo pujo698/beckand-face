@@ -17,6 +17,8 @@ use App\Http\Controllers\HolidayController;
 
 // Endpoint publik (tidak butuh token)
 Route::post('/login', [AuthController::class, 'login']);
+// Endpoint publik untuk testing stats
+// Route::get('/employee/stats', [App\Http\Controllers\EmployeeController::class, 'monthlyStats']);
 
 // Endpoint dengan autentikasi Sanctum
 Route::middleware('auth:sanctum')->group(function () {

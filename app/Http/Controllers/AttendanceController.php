@@ -99,6 +99,22 @@ class AttendanceController extends Controller
     public function logs()
     {
         return AttendanceLog::with('user:id,name,email')->latest()->paginate(20);
+
+        if ($request->has('name')) {
+            $query->whereHas('user', function ($q) use ($request) {
+                $q->where('name', 'like', '%' . $request->name . '%');
+            });
+        }
+
+        if ($request->has('strart_date') && $request->has('end_date')) {
+            $query->whereBetween('check_in', [$request->start_date, $request->end_date]);
+        }
+
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        return $query->paginate(20);
     }
     // Riwayat absensi user 
     public function history(Request $request)

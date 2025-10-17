@@ -78,11 +78,33 @@ class LeaveController extends Controller
     /**
      * Admin melihat semua permohonan izin.
      */
-    public function index()
+    public function index(Request $request)
     {
-        return LeaveRequest::with('user:id,name')->latest()->get();
-    }
+        // Mulai kueri dengan mengambil relasi user
+        $query = LeaveRequest::with('user:id,name,position')->latest();
 
+        // Terapkan filter berdasarkan status (approved/rejected/pending)
+        if ($request->has('status') && in_array($request->status, ['approved', 'rejected', 'pending'])) {
+            $query->where('status', $request->status);
+        }
+
+        // Terapkan filter berdasarkan nama karyawan
+        if ($request->has('name')) {
+            $query->whereHas('user', function ($q) use ($request) {
+                $q->where('name', 'like', '%' . $request->name . '%');
+            });
+        }
+
+        // Terapkan filter berdasarkan jabatan
+        if ($request->has('position')) {
+            $query->whereHas('user', function ($q) use ($request) {
+                $q->where('position', 'like', '%' . $request->position . '%');
+            });
+        }
+
+        // Eksekusi kueri dan kembalikan hasilnya
+        return $query->get();
+    }
     /**
      * Admin menyetujui permohonan izin.
      */

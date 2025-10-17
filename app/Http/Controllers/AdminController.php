@@ -14,11 +14,22 @@ class AdminController extends Controller
     /**
      * Menampilkan daftar semua karyawan.
      */
-    public function index()
+    public function index(Request $request)
     {
-        return User::where('role', 'employee')->latest()->get();
-    }
+        $query = User::where('role', 'employee')->latest();
 
+        // Filter berdasarkan jabatan
+        if ($request->has('position')) {
+            $query->where('position', 'like', '%' . $request->position . '%');
+        }
+
+        // Filter berdasarkan status
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        return $query->get();
+    }
     /**
      * Menyimpan karyawan baru.
      */

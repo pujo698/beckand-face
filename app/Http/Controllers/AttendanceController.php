@@ -25,63 +25,79 @@ class AttendanceController extends Controller
 
         $user = Auth::user();
 
-        // Cek apakah karyawan punya izin dinas luar yang aktif untuk hari ini
+        // Cek izin dinas luar
         $hasOnDutyAuth = OnDutyAuthorization::where('user_id', $user->id)
             ->where('start_date', '<=', now()->toDateString())
             ->where('end_date', '>=', now()->toDateString())
             ->exists();
-        
-        // Jika TIDAK punya izin dinas, maka jalankan pemeriksaan lokasi
+
+        // Hanya cek lokasi jika tidak dinas luar
         if (!$hasOnDutyAuth) {
-            
             $officeLat = env('OFFICE_LATITUDE');
             $officeLon = env('OFFICE_LONGITUDE');
             $allowedRadius = env('ALLOWED_RADIUS_METERS');
 
-            $distance = $this->calculateDistance(
-                $request->latitude, $request->longitude, $officeLat, $officeLon
-            );
+            if (is_null($officeLat) || is_null($officeLon) || is_null($allowedRadius)) {
+                \Log::warning('OFFICE_* env missing, skip radius check.');
+            } else {
+                $officeLat = (float) $officeLat;
+                $officeLon = (float) $officeLon;
+                $allowedRadius = (float) $allowedRadius;
 
-            if ($distance > $allowedRadius) {
-                return response()->json(['message' => 'Anda berada di luar radius lokasi kerja yang diizinkan.'], 403);
+                $distance = $this->calculateDistance(
+                    (float) $request->latitude,
+                    (float) $request->longitude,
+                    $officeLat,
+                    $officeLon
+                );
+
+                if ($distance > $allowedRadius) {
+                    return response()->json([
+                        'message' => 'Anda berada di luar radius lokasi kerja yang diizinkan.',
+                        'distance' => round($distance, 2)
+                    ], 403);
+                }
             }
         }
 
-        if ($user->attendanceLogs()->whereDate('check_in', Carbon::today())->exists()) {
+        // Cegah check-in ganda
+        if ($user->attendanceLogs()->whereDate('check_in', now())->exists()) {
             return response()->json(['message' => 'Anda sudah melakukan check-in hari ini.'], 409);
         }
 
-        // Logika jadwal/shift tetap sama
+        // Tentukan status (Tepat Waktu / Terlambat)
         $todaySchedule = UserSchedule::where('user_id', $user->id)
-            ->where('date', Carbon::today())
+            ->where('date', now()->toDateString())
             ->with('shift')->first();
 
         $status = 'Tepat Waktu';
         $currentTime = now();
 
         if ($todaySchedule) {
-            // Jika ada jadwal: Ambil jam masuk dan tambahkan 30 menit
             $entryDeadline = Carbon::parse($todaySchedule->shift->start_time)->addMinutes(30);
             if ($currentTime->isAfter($entryDeadline)) {
                 $status = 'Terlambat';
             }
         } else {
-            // Jika tidak ada jadwal: Gunakan jam 8 pagi dan tambahkan 30 menit
-            $entryDeadline = Carbon::today()->setHour(8)->setMinute(30);
+            $entryDeadline = now()->setHour(8)->setMinute(30);
             if ($currentTime->isAfter($entryDeadline)) {
                 $status = 'Terlambat';
             }
         }
-            
-            $log = $user->attendanceLogs()->create([
-                'check_in'  => now(),
-                'status'    => $status,
-                'latitude'  => $request->latitude,
-                'longitude' => $request->longitude,
-            ]);
-            
-            return response()->json(['message' => 'Check-in berhasil. Status: ' . $status, 'data' => $log], 201);
-        }
+
+        // Simpan data absensi
+        $log = $user->attendanceLogs()->create([
+            'check_in'  => now(),
+            'status'    => $status,
+            'latitude'  => $request->latitude,
+            'longitude' => $request->longitude,
+        ]);
+
+        return response()->json([
+            'message' => "Check-in berhasil. Status: {$status}",
+            'data' => $log
+        ], 201);
+    }
 
     public function checkOut(Request $request)
     {

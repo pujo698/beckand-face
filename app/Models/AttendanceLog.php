@@ -36,6 +36,15 @@ class AttendanceLog extends Model
         'check_in',
         'check_out',
         'status',
+        'latitude',
+        'longitude',
+    ];
+
+        protected $casts = [
+        'check_in'  => 'datetime',
+        'check_out' => 'datetime',
+        'latitude'  => 'float',
+        'longitude' => 'float',
     ];
 
     // Relasi ke User

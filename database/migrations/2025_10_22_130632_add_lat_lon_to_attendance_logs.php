@@ -21,7 +21,16 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('attendance_logs', function (Blueprint $table) {
-            $table->dropColumn(['latitude', 'longitude']);
+            
+            // PERBAIKAN: Hanya hapus kolom 'latitude' JIKA ADA
+            if (Schema::hasColumn('attendance_logs', 'latitude')) {
+                $table->dropColumn('latitude');
+            }
+
+            // PERBAIKAN: Hanya hapus kolom 'longitude' JIKA ADA
+            if (Schema::hasColumn('attendance_logs', 'longitude')) {
+                $table->dropColumn('longitude');
+            }
         });
     }
 };

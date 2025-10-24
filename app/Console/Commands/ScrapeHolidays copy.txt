@@ -1,0 +1,133 @@
+<?php
+
+namespace App\Console\Commands;
+
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Http; // Hanya butuh HTTP Client
+use App\Models\Holiday;              // Tetap butuh Model
+use Carbon\Carbon;                    // Tetap butuh Carbon (opsional)
+
+// Ganti nama class jika mau (misal: FetchHolidays)
+class ScrapeHolidays extends Command
+{
+    /**
+     * Tanda tangan command (ganti jika Anda ganti nama class)
+     */
+    // protected $signature = 'app:fetch-holidays {--year=}'; // Contoh nama baru
+    protected $signature = 'app:scrape-holidays {--year=}';
+
+    /**
+     * Deskripsi command
+     */
+    protected $description = 'Mengambil data hari libur dari API api-harilibur.vercel.app';
+
+    /**
+     * URL dasar API (sekarang menyertakan /api)
+     */
+    private $apiUrl = 'https://api-harilibur.vercel.app/api';
+
+    /**
+     * Fungsi utama command
+     */
+    public function handle()
+    {
+        $year = $this->option('year') ?? date('Y');
+        $this->info("🚀 Mengambil data hari libur untuk tahun {$year} dari API...");
+
+        $savedCount = 0;
+        $totalErrors = 0;
+
+        // Loop 12 kali, untuk setiap bulan (1 sampai 12)
+        for ($month = 1; $month <= 12; $month++) {
+            $this->line("   Mengambil data untuk bulan {$month}...");
+
+            // Bangun URL API dengan parameter bulan dan tahun
+            $fullApiUrl = $this->apiUrl . '?month=' . $month . '&year=' . $year;
+
+            try {
+                $response = Http::acceptJson()->get($fullApiUrl);
+
+                if (!$response->successful()) {
+                    $this->error("   ❌ Gagal mengambil data bulan {$month}. Status: " . $response->status());
+                    $this->line("      URL: " . $fullApiUrl);
+                    $this->line("      Body Error: " . substr($response->body(), 0, 200)); // Tampilkan awal body error
+                    $totalErrors++;
+                    continue; // Lanjut ke bulan berikutnya
+                }
+
+                $holidaysData = $response->json();
+
+                // Cek jika data bulan ini kosong atau format salah
+                if (empty($holidaysData) || !is_array($holidaysData)) {
+                    // API ini mengembalikan array kosong jika tidak ada libur, jadi ini bukan error
+                    // $this->line("   Tidak ada hari libur di bulan {$month}.");
+                    continue;
+                }
+
+                // Loop melalui setiap data libur di bulan ini
+                foreach ($holidaysData as $holiday) {
+                    // ==========================================================
+                    // !! PENTING: SESUAIKAN NAMA KEY INI !!
+                    // Ganti 'holiday_date' dan 'holiday_name' dengan key yang benar
+                    // dari respons JSON API (misal: 'tanggal', 'keterangan', 'name')
+                    // ==========================================================
+                    $dateKey = 'holiday_date'; // GANTI JIKA PERLU
+                    $descKey = 'holiday_name'; // GANTI JIKA PERLU
+
+                    if (!isset($holiday[$dateKey]) || !isset($holiday[$descKey])) {
+                        $this->warn("   ⚠️ Data item API tidak lengkap, dilewati: " . json_encode($holiday));
+                        $totalErrors++;
+                        continue;
+                    }
+
+                    $dateString = $holiday[$dateKey];
+                    $description = $holiday[$descKey];
+
+                    // Coba simpan ke database
+                    if ($this->saveHoliday($dateString, $description)) {
+                        $savedCount++;
+                    } else {
+                        $totalErrors++;
+                    }
+                }
+
+            } catch (\Exception $e) {
+                $this->error("   ❌ Error saat memproses bulan {$month}: " . $e->getMessage());
+                $totalErrors++;
+            }
+             // Beri jeda sedikit antar request agar tidak membebani API
+             sleep(1);
+        } // End loop bulan
+
+        if ($totalErrors > 0) {
+             $this->warn("⚠️ Proses selesai dengan {$totalErrors} error.");
+        }
+        $this->info("✅ Proses selesai. {$savedCount} data hari libur disimpan/diperbarui.");
+        return $totalErrors > 0 ? 1 : 0; // Kembalikan kode error jika ada masalah
+    }
+
+    /**
+     * Fungsi helper untuk menyimpan ke database
+     */
+    private function saveHoliday(string $dateString, string $description) : bool
+    {
+        try {
+            // Coba parse tanggal untuk validasi
+            $dateObject = Carbon::parse($dateString);
+            $formattedDate = $dateObject->format('Y-m-d'); // Pastikan format YYYY-MM-DD
+
+            // Simpan atau update data
+            Holiday::updateOrCreate(
+                ['date' => $formattedDate],
+                ['description' => $description]
+            );
+
+            $this->line("      💾 Disimpan: {$formattedDate} - {$description}");
+            return true;
+
+        } catch (\Exception $e) {
+            $this->error("      ⚠️ Gagal parse/simpan tanggal: '{$dateString}' ({$e->getMessage()})");
+            return false;
+        }
+    }
+}

@@ -78,6 +78,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/holidays', [HolidayController::class, 'index']);
         Route::post('/holidays', [HolidayController::class, 'store']);
         Route::delete('/holidays/{holiday}', [HolidayController::class, 'destroy']);
+        Route::post('/holidays/import', [HolidayController::class, 'import']);
     }); 
 
     // ==============================

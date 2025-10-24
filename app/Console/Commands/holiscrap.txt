@@ -1,0 +1,274 @@
+<?php
+
+namespace App\Console\Commands;
+
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Http;
+use Symfony\Component\DomCrawler\Crawler;
+use App\Models\Holiday;
+use Carbon\Carbon;
+
+class ScrapeHolidays extends Command
+{
+    protected $signature = 'app:scrape-holidays {--year=}';
+    protected $description = 'Scrape data hari libur nasional dan cuti bersama dari situs setkab.go.id';
+    private $baseUrl = 'https://setkab.go.id/';
+
+    private $monthMap = [
+        'Januari'   => 'January',
+        'Februari'  => 'February',
+        'Maret'     => 'March',
+        'April'     => 'April',
+        'Mei'       => 'May',
+        'Juni'      => 'June',
+        'Juli'      => 'July',
+        'Agustus'   => 'August',
+        'September' => 'September',
+        'Oktober'   => 'October',
+        'November'  => 'November',
+        'Desember'  => 'December',
+    ];
+
+    public function handle()
+    {
+        $year = $this->option('year') ?? date('Y');
+        $this->info("🔍 Mencari artikel SKB 3 Menteri untuk tahun {$year}...");
+
+        $articleUrl = $this->findArticleUrlFromSearch($year);
+
+        if (!$articleUrl) {
+            $this->warn("⚠️ Artikel untuk tahun {$year} belum ditemukan di situs Setkab.");
+            return 1;
+        }
+
+        $this->info("✅ Artikel ditemukan: {$articleUrl}");
+        $this->scrapeUrl($articleUrl, $year);
+        $this->info("🎉 Proses scraping selesai.");
+        return 0;
+    }
+
+    private function findArticleUrlFromSearch(string $year): ?string
+    {
+        // Kueri pencarian Anda
+        $query = "hari libur nasional {$year}";
+        $searchUrl = $this->baseUrl . '?s=' . urlencode($query);
+        $this->info("   Mencari di: {$searchUrl}");
+
+        try {
+            $response = Http::get($searchUrl);
+            if (!$response->successful()) {
+                $this->error("   ❌ Gagal membuka halaman pencarian.");
+                return null;
+            }
+
+            $crawler = new Crawler($response->body());
+
+            // Array selector Anda
+            $selectors = [
+                '.elementor-post__title a',
+                'h2.entry-title a',
+                'article a',
+            ];
+            $foundUrl = null;
+
+            foreach ($selectors as $selector) {
+                if ($foundUrl) break; // Hentikan jika sudah ketemu
+
+                $nodes = $crawler->filter($selector);
+                $this->line("   Mencoba selector '{$selector}': " . $nodes->count() . " hasil ditemukan.");
+
+                if ($nodes->count() > 0) {
+                     $nodes->each(function ($node) use ($year, &$foundUrl) {
+                        // Periksa judul setiap link
+                        $title = strtolower(trim($node->text()));
+                        // Jika judul mengandung tahun yang dicari, ambil URL-nya
+                        if (str_contains($title, $year) && is_null($foundUrl)) {
+                            $this->info("   ✅ Judul cocok ditemukan: {$node->text()}");
+                            $foundUrl = $node->attr('href');
+                        }
+                    });
+                     // Jika loop di atas menemukan URL, selector ini berhasil
+                     if ($foundUrl) {
+                          $this->info("   🔎 Selector link aktif: {$selector}");
+                     }
+                }
+            }
+
+            if(is_null($foundUrl)){
+                 $this->warn("   ⚠️ Tidak ada artikel ditemukan yang judulnya cocok untuk tahun {$year}.");
+            }
+            return $foundUrl;
+
+        } catch (\Exception $e) {
+            $this->error("   ❌ Error saat parsing halaman pencarian: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    private function scrapeUrl(string $url, string $year)
+    {
+        try {
+            $response = Http::get($url);
+            if (!$response->successful()) {
+                $this->error("❌ Gagal mengambil konten artikel dari: {$url}");
+                return;
+            }
+
+            $crawler = new Crawler($response->body());
+
+            // Array selector konten Anda
+            $selectors = [
+                'article ol li', // Target utama
+                '.entry-content ol li', // Alternatif
+                'article p', // Fallback paragraf
+                '.entry-content p'
+            ];
+
+            $textBlock = '';
+            $usedSelector = null;
+
+            foreach ($selectors as $selector) {
+                 $nodes = $crawler->filter($selector);
+                 if ($nodes->count() > 0) {
+                      $itemsFound = 0; // Hitung item valid
+                      $nodes->each(function ($node) use (&$textBlock, &$itemsFound) {
+                           $text = trim($node->text());
+                           // Hanya kumpulkan teks yang terlihat seperti item libur
+                           if (preg_match('/^\d*\.?\s*\d+\s+[A-Za-z]+/', $text) || str_contains($text, ':')) {
+                               $textBlock .= $text . "\n";
+                               $itemsFound++;
+                           }
+                      });
+                      // Jika selector ini menghasilkan item libur, gunakan
+                      if ($itemsFound > 0) {
+                          $usedSelector = $selector;
+                          $this->info("⛏️ Selector konten aktif: {$usedSelector} (menemukan {$itemsFound} item)");
+                          break;
+                      } else {
+                           $this->line("   Mencoba selector konten '{$selector}': Menemukan node, tapi tidak ada item libur valid.");
+                      }
+                 } else {
+                      $this->line("   Mencoba selector konten '{$selector}': 0 hasil.");
+                 }
+            }
+
+
+            if (empty(trim($textBlock))) {
+                $this->warn("⚠️ Tidak ada teks daftar libur valid ditemukan.");
+                return;
+            }
+
+            // Ubah bulan ke bahasa Inggris
+            $textBlock = str_replace(array_keys($this->monthMap), array_values($this->monthMap), $textBlock);
+
+            // Pisahkan bagian libur nasional dan cuti bersama
+            $sections = preg_split('/cuti\s+bersama/i', $textBlock, 2, PREG_SPLIT_NO_EMPTY);
+
+            // ==========================
+            // LIBUR NASIONAL
+            // ==========================
+            $this->info("   Memproses bagian Libur Nasional...");
+            // Regex mencari pola "1. ...", "2. ...", dst. atau hanya "..." jika tidak ada nomor
+            preg_match_all('/(?:^\d*\.\s*)?(.+?)(?=\s*\d+\.|$)/s', $sections[0], $matches, PREG_SET_ORDER);
+            foreach ($matches as $match) {
+                 $itemText = trim($match[1]);
+                 $this->parseAndSaveDateRange($itemText, $year); // Hapus $type
+            }
+
+
+            // ==========================
+            // CUTI BERSAMA
+            // ==========================
+            if (isset($sections[1])) {
+                $this->info("   Memproses bagian Cuti Bersama...");
+                 preg_match_all('/(?:^\d*\.\s*)?(.+?)(?=\s*\d+\.|$)/s', $sections[1], $matchesCuti, PREG_SET_ORDER);
+                 foreach ($matchesCuti as $match) {
+                      $itemText = trim($match[1]);
+                      $this->parseAndSaveDateRange($itemText, $year); // Hapus $type
+                 }
+            } else {
+                 $this->warn("   ⚠️ Bagian Cuti Bersama tidak ditemukan dalam teks.");
+            }
+
+        } catch (\Exception $e) {
+            $this->error("❌ Gagal scraping URL ({$url}): " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Parsing tanggal tunggal atau rentang
+     */
+    private function parseAndSaveDateRange(string $item, string $year) // Hapus $type
+    {
+        // Regex diperkuat: mencari [tanggal/rentang] [bulan] [deskripsi]
+        if (preg_match('/^([\d,\s-]+)\s+([A-Za-z]+)\s*(?:\([^)]+\))?\s*(.+)/u', $item, $match)) {
+            $daysPart = trim($match[1]); // "1", "31-1", "2, 3, 4, 7"
+            $month = trim($match[2]);   // "January"
+            $desc = trim($match[3]);    // Deskripsi
+
+            // Hapus kata 'dan' atau '&' dari bagian tanggal
+             $daysPart = preg_replace('/\s+(dan|&)\s+/i', ' ', $daysPart);
+             // Ganti koma dan strip dengan spasi, lalu pecah jadi array
+             $days = preg_split('/[\s,-]+/', $daysPart, -1, PREG_SPLIT_NO_EMPTY);
+
+            foreach ($days as $day) {
+                // Jika ini rentang (misal dari "31-1"), $day akan jadi "31-1", kita pecah lagi
+                if (strpos($day, '-') !== false && strpos($day, '-') > 0) { // Pastikan strip bukan di awal
+                     list($startDay, $endDay) = explode('-', $day);
+                     // Pastikan $startDay dan $endDay adalah angka valid
+                     if (ctype_digit($startDay) && ctype_digit($endDay)) {
+                         for ($d = (int)$startDay; $d <= (int)$endDay; $d++) {
+                             $this->saveHoliday($d, $month, $year, $desc); // Hapus $type
+                         }
+                     } else {
+                          $this->warn("   ⚠️ Format rentang hari tidak valid: " . $day);
+                     }
+                } elseif (ctype_digit($day)) { // Pastikan $day adalah angka
+                     // Tanggal tunggal
+                     $this->saveHoliday((int)$day, $month, $year, $desc); // Hapus $type
+                } else {
+                     $this->warn("   ⚠️ Format hari tidak valid: " . $day);
+                }
+            }
+        } else {
+            $this->warn("   ⚠️ Format item tidak dikenali: {$item}");
+        }
+    }
+
+    /**
+     * ==============================================================
+     * FUNGSI SIMPAN KE DB (SUDAH DIPERBAIKI SESUAI TABEL ANDA)
+     * ==============================================================
+     */
+    private function saveHoliday($day, $month, $year, $description) // Hapus $name, $type
+    {
+        try {
+            // Normalisasi dan validasi bulan
+            $month = ucfirst(strtolower($month));
+            if (!in_array($month, array_values($this->monthMap))) {
+                 $this->error("   ⚠️ Nama bulan tidak valid: " . $month);
+                 return;
+            }
+
+            // Dapatkan nomor bulan untuk checkdate
+            $monthNum = array_search($month, $this->monthMap);
+            if ($monthNum === false || !checkdate($monthNum, $day, $year)) {
+                 $this->error("   ⚠️ Tanggal tidak valid: {$day} {$month} {$year}");
+                 return;
+            }
+
+            $dateString = "{$day} {$month} {$year}";
+            $date = Carbon::parse($dateString)->format('Y-m-d');
+
+            // Simpan atau update data (hanya 'date' dan 'description')
+            Holiday::updateOrCreate(
+                ['date' => $date],
+                ['description' => $description] // Sesuai tabel Anda
+            );
+
+            $this->info("   💾 Disimpan: {$date} - {$description}");
+        } catch (\Exception $e) {
+            $this->error("   ⚠️ Gagal parse/simpan tanggal: {$day} {$month} {$year} ({$e->getMessage()})");
+        }
+    }
+}

@@ -17,12 +17,14 @@ class LeaveController extends Controller
             'reason' => 'required|string',
             'duration' => 'required|string',
             'type' => 'nullable|in:izin,cuti,sakit',
-            'support_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:2048',
+            'support_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:10240',
         ]);
 
         $path = null;
+        $originalName = null;
         if ($request->hasFile('support_file')) {
             $path = $request->file('support_file')->store('leave_support', 'public');
+            $originalName = $request->file('support_file')->getClientOriginalName();
         }
 
         $leaveRequest = Auth::user()->leaveRequests()->create([
@@ -30,15 +32,12 @@ class LeaveController extends Controller
             'duration' => $request->duration,
             'type' => $request->type ?? 'izin',
             'support_file' => $path,
+            'support_file_original_name' => $originalName,
+
         ]);
 
         return response()->json(['message' => 'Permohonan izin berhasil diajukan.', 'data' => $leaveRequest], 201);
     }
-
-    // ===================================================================
-    // ===            AWAL DARI BAGIAN YANG DITAMBAHKAN                ===
-    // ===================================================================
-
     /**
      * Karyawan melihat riwayat permohonan izin miliknya.
      */
@@ -69,11 +68,6 @@ class LeaveController extends Controller
 
         return response()->json($leaveRequest);
     }
-
-    // ===================================================================
-    // ===             AKHIR DARI BAGIAN YANG DITAMBAHKAN              ===
-    // ===================================================================
-
 
     /**
      * Admin melihat semua permohonan izin.

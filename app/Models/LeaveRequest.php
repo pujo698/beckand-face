@@ -37,6 +37,7 @@ class LeaveRequest extends Model
         'user_id',
         'reason',
         'support_file',
+        'support_file_original_name',
         'duration',
         'status',
         'type',

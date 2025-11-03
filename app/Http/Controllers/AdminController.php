@@ -6,7 +6,6 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
-// TAMBAHAN: Use statement untuk fungsi rekap
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use App\Models\Holiday;
@@ -27,6 +26,9 @@ class AdminController extends Controller
         }
         if ($request->has('status')) {
             $query->where('status', $request->status);
+        }
+        if ($request->filled('name')) {
+            $query->where('name', 'like', '%' . $request->name . '%');
         }
         return $query->get();
     }
@@ -124,7 +126,14 @@ class AdminController extends Controller
         $endDate = Carbon::parse($request->end_date)->endOfDay();
         $today = Carbon::today();
 
-        $employees = User::where('role', 'employee')->where('status', 'active')->get();
+        $employeeQuery = User::where('role', 'employee')->where('status', 'active');
+        if ($request->filled('name')) {
+            $employeeQuery->where('name', 'like', '%' . $request->name . '%');
+        }
+        if ($request->filled('position')) {
+            $employeeQuery->where('position', 'like', '%' . $request->position . '%');
+        }
+        $employees = $employeeQuery->get();
         $holidays = Holiday::whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
                            ->pluck('date')
                            ->map(fn($date) => Carbon::parse($date)->format('Y-m-d'))
@@ -205,7 +214,15 @@ class AdminController extends Controller
         $endDate = Carbon::parse($request->end_date)->endOfDay();
         $today = Carbon::today();
 
-        $employees = User::where('role', 'employee')->where('status', 'active')->get();
+        $employeeQuery = User::where('role', 'employee')->where('status', 'active');
+        if ($request->filled('name')) {
+            $employeeQuery->where('name', 'like', '%' . $request->name . '%');
+        }
+        if ($request->filled('position')) {
+            $employeeQuery->where('position', 'like', '%' . $request->position . '%');
+        }
+        $employees = $employeeQuery->get();
+
         $holidays = Holiday::whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
                            ->pluck('date')
                            ->map(fn($date) => Carbon::parse($date)->format('Y-m-d'))
@@ -277,7 +294,15 @@ class AdminController extends Controller
         $startDate = Carbon::parse($request->start_date)->startOfDay();
         $endDate = Carbon::parse($request->end_date)->endOfDay();
 
-        $employees = User::where('role', 'employee')->where('status', 'active')->get();
+        $employeeQuery = User::where('role', 'employee')->where('status', 'active');
+        if ($request->filled('name')) {
+            $employeeQuery->where('name', 'like', '%' . $request->name . '%');
+        }
+        if ($request->filled('position')) {
+            $employeeQuery->where('position', 'like', '%' . $request->position . '%');
+        }
+        $employees = $employeeQuery->get();
+        
         $recapData = [];
 
         foreach ($employees as $employee) {

@@ -67,6 +67,64 @@ class AdminController extends Controller
         return response()->json($user, 201);
     }
 
+    public function dashboardSummary()
+    {
+        $today = Carbon::today();
+        $todayString = $today->toDateString();
+
+        $totalKaryawan = User::where('role', 'employee')
+                             ->where('status', 'active')
+                             ->count();
+
+        $hadirLogs = AttendanceLog::with('user:id,name,position')
+                                    ->whereDate('check_in', $todayString)
+                                    ->where('status', 'Tepat Waktu')
+                                    ->get();
+                                    
+        $terlambatLogs = AttendanceLog::with('user:id,name,position')
+                                        ->whereDate('check_in', $todayString)
+                                        ->where('status', 'Terlambat')
+                                        ->get();
+
+        $izinSakitLogs = LeaveRequest::with('user:id,name,position') 
+                                        ->where('status', 'approved')
+                                        ->whereDate('start_date', '<=', $todayString)
+                                        ->whereDate('end_date', '>=', $todayString)
+                                        ->get();
+                                    
+        $aktivitasTerbaru = AttendanceLog::with('user:id,name,position') 
+                                        ->whereDate('check_in', $todayString)
+                                        ->latest('check_in') 
+                                        ->take(5) 
+                                        ->get();
+
+        $karyawanTerbaru = User::where('role', 'employee')
+                                ->latest('created_at') 
+                                ->take(5) 
+                                ->get(['id', 'name', 'position', 'created_at']);
+
+        return response()->json([
+            'summary' => [
+                'total_karyawan' => $totalKaryawan,
+                
+                'hadir_hari_ini' => [
+                    'count' => $hadirLogs->count(),
+                    'users' => $hadirLogs->map(fn($log) => $log->user)->unique('id')->values() 
+                ],
+                'terlambat_hari_ini' => [
+                    'count' => $terlambatLogs->count(),
+                    'users' => $terlambatLogs->map(fn($log) => $log->user)->unique('id')->values()
+                ],
+                'izin_sakit_hari_ini' => [
+                    'count' => $izinSakitLogs->count(),
+                    'users' => $izinSakitLogs->map(fn($log) => $log->user)->unique('id')->values()
+                ],
+            ],
+            'latest_activities' => $aktivitasTerbaru,
+            'newest_employees' => $karyawanTerbaru,
+        ]);
+    }
+
     /**
      * Mengupdate data karyawan.
      */

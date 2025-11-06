@@ -18,6 +18,8 @@ class LeaveController extends Controller
             'duration' => 'required|string',
             'type' => 'nullable|in:izin,cuti,sakit',
             'support_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:10240',
+            'start_date' => 'required|date',
+            'end_date'   => 'required|date|after_or_equal:start_date',
         ]);
 
         $path = null;
@@ -33,11 +35,13 @@ class LeaveController extends Controller
             'type' => $request->type ?? 'izin',
             'support_file' => $path,
             'support_file_original_name' => $originalName,
-
+            'start_date' => $request->start_date,
+            'end_date' => $request->end_date,
         ]);
 
         return response()->json(['message' => 'Permohonan izin berhasil diajukan.', 'data' => $leaveRequest], 201);
     }
+
     /**
      * Karyawan melihat riwayat permohonan izin miliknya.
      */
@@ -58,12 +62,10 @@ class LeaveController extends Controller
      */
     public function show(LeaveRequest $leaveRequest)
     {
-        // Keamanan: Pastikan karyawan hanya bisa melihat izin miliknya sendiri
         if ($leaveRequest->user_id !== Auth::id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        // Memuat data relasi admin yang menyetujui/menolak (approver)
         $leaveRequest->load('approver:id,name');
 
         return response()->json($leaveRequest);
@@ -74,31 +76,49 @@ class LeaveController extends Controller
      */
     public function index(Request $request)
     {
-        // Mulai kueri dengan mengambil relasi user
         $query = LeaveRequest::with('user:id,name,position')->latest();
 
-        // Terapkan filter berdasarkan status (approved/rejected/pending)
+        // Filter berdasarkan status (approved/rejected/pending)
         if ($request->has('status') && in_array($request->status, ['approved', 'rejected', 'pending'])) {
             $query->where('status', $request->status);
         }
 
-        // Terapkan filter berdasarkan nama karyawan
+        // Filter berdasarkan nama karyawan
         if ($request->has('name')) {
             $query->whereHas('user', function ($q) use ($request) {
                 $q->where('name', 'like', '%' . $request->name . '%');
             });
         }
 
-        // Terapkan filter berdasarkan jabatan
+        // Filter berdasarkan jabatan
         if ($request->has('position')) {
             $query->whereHas('user', function ($q) use ($request) {
                 $q->where('position', 'like', '%' . $request->position . '%');
             });
         }
 
-        // Eksekusi kueri dan kembalikan hasilnya
+        // Filter berdasarkan tipe izin
+        if ($request->has('type') && in_array($request->type, ['izin', 'cuti', 'sakit'])) {
+            $query->where('type', $request->type);
+        }
+
+        // Filter berdasarkan jenis absensi/durasi
+        if ($request->has('duration')) {
+            $query->where('duration', 'like', '%' . $request->duration . '%');
+        }
+
+        // 🔹 Filter berdasarkan ketepatan waktu pengajuan (tepat_waktu / terlambat)
+        if ($request->has('timing') && in_array($request->timing, ['tepat_waktu', 'terlambat'])) {
+            if ($request->timing === 'tepat_waktu') {
+                $query->whereColumn('created_at', '<=', 'start_date');
+            } elseif ($request->timing === 'terlambat') {
+                $query->whereColumn('created_at', '>', 'start_date');
+            }
+        }
+
         return $query->get();
     }
+
     /**
      * Admin menyetujui permohonan izin.
      */

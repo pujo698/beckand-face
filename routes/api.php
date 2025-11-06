@@ -42,6 +42,9 @@ Route::middleware('auth:sanctum')->group(function () {
         
         // Log absensi
         Route::get('/attendance-logs', [AttendanceController::class, 'logs']);
+
+        // Dashboard summary
+        Route::get('/dashboard-summary', [AdminController::class, 'dashboardSummary']);
         
         // Permintaan izin cuti (approve/reject)
         Route::get('/leave-requests', [LeaveController::class, 'index']);

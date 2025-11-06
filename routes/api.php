@@ -39,6 +39,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/users/{user}', [AdminController::class, 'show']);
         Route::put('/users/{user}', [AdminController::class, 'update']);
         Route::delete('/users/{user}', [AdminController::class, 'destroy']);
+
+        // revoke token user
+        Route::post('/users/{user}/revoke-tokens', [AdminController::class, 'revokeUserTokens']);
         
         // Log absensi
         Route::get('/attendance-logs', [AttendanceController::class, 'logs']);

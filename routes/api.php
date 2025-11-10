@@ -90,6 +90,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/attendance/recap', [AdminController::class, 'attendanceRecapByDateRange']);
         Route::get('/leave-absence/recap', [AdminController::class, 'leaveAbsenceRecap']);
         Route::get('/leave-days/recap', [AdminController::class, 'leaveDaysRecap']);
+
+        // Kelola Permintaan Reset Password
+        Route::get('/password-reset-requests', [AdminController::class, 'listPasswordRequests']);
+
+        // admin mengganti password karyawan
+        Route::post('/users/{user}/set-password', [AdminController::class, 'setPassword']);
     }); 
 
     // ==============================
@@ -123,5 +129,8 @@ Route::middleware('auth:sanctum')->group(function () {
         // lihat riwayat absensi
         Route::get('/attendances/history', [AttendanceController::class, 'history']);
         Route::get('/attendances/calendar', [AttendanceController::class, 'getAttendanceCalendar']);
+
+        // lupa password
+        Route::post('/request-password-reset', [AuthController::class, 'requestPasswordReset']);
     });
 });

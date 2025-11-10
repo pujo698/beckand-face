@@ -33,6 +33,18 @@ class AdminController extends Controller
         return $query->get();
     }
 
+    public function revokeUserTokens(User $user)
+    {
+        
+        if ($user->role === 'admin') {
+             return response()->json(['message' => 'Tidak dapat mencabut token admin.'], 403);
+        }
+
+        $user->tokens()->delete(); 
+
+        return response()->json(['message' => 'Semua sesi login untuk ' . $user->name . ' telah dicabut.']);
+    }
+
     /**
      * Menyimpan karyawan baru.
      */
@@ -427,6 +439,36 @@ class AdminController extends Controller
             ];
         }
         return response()->json($recapData);
+    }
+
+    public function setPassword(Request $request, User $user)
+    {
+        $request->validate([
+            'password' => ['required', 'confirmed', 'min:8'],
+        ]);
+
+        if ($user->role === 'admin' && $user->id !== Auth::id()) {
+             return response()->json(['message' => 'Anda tidak dapat mengganti password admin lain.'], 403);
+        }
+        
+        // Ganti password user
+        $user->forceFill([
+            'password' => Hash::make($request->password)
+        ])->save();
+
+        $user->tokens()->delete();
+
+        return response()->json(['message' => 'Password untuk ' . $user->name . ' telah berhasil diubah.']);
+    }
+
+    public function listPasswordRequests(Request $request)
+    {
+        $requests = PasswordResetRequest::with('user:id,name,email,phone,position')
+                                        ->where('status', 'pending')
+                                        ->latest()
+                                        ->get();
+
+        return response()->json($requests);
     }
 
 }

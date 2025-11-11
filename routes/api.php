@@ -14,11 +14,15 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\OnDutyAuthorizationController;
 use App\Http\Controllers\HolidayController;
+use App\Http\Controllers\Auth\PasswordResetLinkController;
 
 // Endpoint publik (tidak butuh token)
 Route::post('/login', [AuthController::class, 'login']);
 // Endpoint publik untuk testing stats
 // Route::get('/employee/stats', [App\Http\Controllers\EmployeeController::class, 'monthlyStats']);
+
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
 // Endpoint dengan autentikasi Sanctum
 Route::middleware('auth:sanctum')->group(function () {
@@ -104,7 +108,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('employee')->prefix('employee')->group(function () {
         // Profil karyawan
         Route::get('/profile', [EmployeeController::class, 'profile']);
-        Route::post('/profile', [EmployeeController::class, 'updateProfile']); // POST dipakai untuk update + upload file
+        Route::post('/profile', [EmployeeController::class, 'updateProfile']);
         Route::get('/stats', [EmployeeController::class, 'monthlyStats']);
                 
         // Absensi
@@ -131,6 +135,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/attendances/calendar', [AttendanceController::class, 'getAttendanceCalendar']);
 
         // lupa password
-        Route::post('/request-password-reset', [AuthController::class, 'requestPasswordReset']);
+        // Route::post('/request-password-reset', [AuthController::class, 'requestPasswordReset']);
     });
 });

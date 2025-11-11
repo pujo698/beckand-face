@@ -25,6 +25,10 @@ return Application::configure(basePath: dirname(__DIR__))
         'employee' => \App\Http\Middleware\EmployeeMiddleware::class,
          ]);
 
+        // $middleware->validateCsrfTokens(except: [
+        //     'api/*'
+        // ]);
+
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

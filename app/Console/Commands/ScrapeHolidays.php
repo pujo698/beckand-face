@@ -3,17 +3,15 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Http; // Butuh HTTP Client
-use App\Models\Holiday;              // Butuh Model
-use Carbon\Carbon;                    // Butuh Carbon
+use Illuminate\Support\Facades\Http; 
+use App\Models\Holiday;              
+use Carbon\Carbon;                   
 
-// Ganti nama class jika mau (misal: FetchGoogleHolidays)
 class ScrapeHolidays extends Command
 {
     /**
      * Tanda tangan command (ganti jika Anda ganti nama class)
      */
-    // protected $signature = 'app:fetch-google-holidays {--year=}'; // Contoh nama baru
     protected $signature = 'app:scrape-holidays {--year=}';
 
     /**
@@ -29,7 +27,7 @@ class ScrapeHolidays extends Command
     /**
      * ID Kalender Hari Libur Indonesia
      */
-    private $calendarId = 'en.indonesian#holiday@group.v.calendar.google.com';
+    private $calendarId = 'id.indonesian#holiday@group.v.calendar.google.com';
 
     /**
      * Fungsi utama command
@@ -47,28 +45,26 @@ class ScrapeHolidays extends Command
         }
 
         // Tentukan rentang waktu (1 Jan - 31 Des tahun yang diminta)
-        $timeMin = Carbon::create($year, 1, 1)->startOfDay()->toRfc3339String(); // Format RFC3339
-        $timeMax = Carbon::create($year, 12, 31)->endOfDay()->toRfc3339String(); // Format RFC3339
+        $timeMin = Carbon::create($year, 1, 1)->startOfDay()->toRfc3339String(); 
+        $timeMax = Carbon::create($year, 12, 31)->endOfDay()->toRfc3339String();
 
-        // Ganti {calendarId} di URL API dengan ID kalender yang benar
         $fullApiUrl = str_replace('{calendarId}', urlencode($this->calendarId), $this->apiUrl);
 
         try {
             // Lakukan GET request ke Google Calendar API
             $response = Http::acceptJson()->get($fullApiUrl, [
-                'key' => $apiKey,             // Sertakan API Key
-                'timeMin' => $timeMin,          // Rentang awal
-                'timeMax' => $timeMax,          // Rentang akhir
-                'singleEvents' => 'true',       // Penting: Memecah event berulang
-                'orderBy' => 'startTime',     // Urutkan berdasarkan tanggal
-                'maxResults' => 250,          // Batas maksimal (250 cukup untuk setahun)
+                'key' => $apiKey,             
+                'timeMin' => $timeMin,          
+                'timeMax' => $timeMax,          
+                'singleEvents' => 'true',       
+                'orderBy' => 'startTime',     
+                'maxResults' => 250,          
             ]);
 
             // Cek jika request gagal
             if (!$response->successful()) {
                 $this->error("❌ Gagal mengambil data dari Google API. Status: " . $response->status());
                 $this->line("   URL: " . $fullApiUrl);
-                // Coba tampilkan pesan error dari Google jika ada
                 $errorData = $response->json();
                 if (isset($errorData['error']['message'])) {
                     $this->line("   Pesan Error Google: " . $errorData['error']['message']);
@@ -92,8 +88,6 @@ class ScrapeHolidays extends Command
 
             // Loop melalui setiap item (event libur) dari API
             foreach ($holidaysData as $holiday) {
-                // Ambil tanggal ('start' -> 'date') dan nama libur ('summary')
-                 // Google API mengembalikan tanggal dalam format 'YYYY-MM-DD' untuk event seharian
                 $dateString = $holiday['start']['date'] ?? null;
                 $description = $holiday['summary'] ?? null;
 
@@ -115,7 +109,7 @@ class ScrapeHolidays extends Command
                  $this->warn("⚠️ Proses selesai dengan {$totalErrors} error saat menyimpan.");
             }
             $this->info("✅ Proses selesai. {$savedCount} data hari libur disimpan/diperbarui.");
-            return $totalErrors > 0 ? 1 : 0; // Kembalikan kode error jika ada masalah
+            return $totalErrors > 0 ? 1 : 0;
 
         } catch (\Exception $e) {
             $this->error("❌ Terjadi error: " . $e->getMessage());

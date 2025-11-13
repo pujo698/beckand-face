@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Support\ServiceProvider;
+use App\Models\User;
+use Illuminate\Notifications\Messages\MailMessage;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -20,8 +22,20 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        ResetPassword::createUrlUsing(function (object $notifiable, string $token) {
-            return config('app.frontend_url')."/password-reset/$token?email={$notifiable->getEmailForPasswordReset()}";
+
+        ResetPassword::toMailUsing(function (object $notifiable, string $token) {
+            // Pastikan set FRONTEND_URL di file .env
+            $frontendUrl = config('app.frontend_url', 'http://localhost:3000');
+            $url = $frontendUrl . '/reset-password?token=' . $token . '&email=' . urlencode($notifiable->getEmailForPasswordReset());
+
+            return (new MailMessage)
+                ->subject('Permintaan Reset Password (Aplikasi Absensi)') 
+                ->line('Halo!') 
+                ->line('Anda menerima email ini karena kami menerima permintaan reset password untuk akun Anda.')
+                ->action('Reset Password', $url) 
+                ->line('Link reset password ini akan kedaluwarsa dalam 60 menit.')
+                ->line('Jika Anda tidak meminta reset password, abaikan email ini.')
+                ->salutation('Hormat kami, Tim Absensi');
         });
     }
 }

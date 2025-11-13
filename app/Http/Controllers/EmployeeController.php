@@ -41,7 +41,7 @@ class EmployeeController extends Controller
     {
         $user = Auth::user();
         $request->validate([
-            'name'  => 'sometimes|string|max:255',
+            // 'name'  => 'sometimes|string|max:255',
             'phone' => 'sometimes|nullable|string',
             'photo' => 'sometimes|image|mimes:jpeg,png,jpg|max:2048',
         ]);

@@ -87,8 +87,7 @@ class AttendanceController extends Controller
                 $status = 'Terlambat';
             }
         } else {
-            // Default jika tidak ada jadwal (misal: jam 8:30)
-            $entryDeadline = now()->setHour(8)->setMinute(30);
+            $entryDeadline = now()->setHour(10)->setMinute(0)->setSecond(0);
             if ($currentTime->isAfter($entryDeadline)) {
                 $status = 'Terlambat';
             }

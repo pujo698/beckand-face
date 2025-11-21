@@ -21,7 +21,9 @@ Route::post('/login', [AuthController::class, 'login']);
 // Endpoint publik untuk testing stats
 // Route::get('/employee/stats', [App\Http\Controllers\EmployeeController::class, 'monthlyStats']);
 
-Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+// Kirim link reset password ke email user
+Route::post('/forgot-password', [PasswordResetLinkController::class, 'store']);
+// Proses reset password setelah user klik link di email
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
 // Endpoint dengan autentikasi Sanctum

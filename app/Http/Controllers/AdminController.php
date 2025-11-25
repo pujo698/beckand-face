@@ -81,62 +81,37 @@ class AdminController extends Controller
 
     public function dashboardSummary()
     {
-        $today = Carbon::today();
+        $today = \Carbon\Carbon::today();
         $todayString = $today->toDateString();
 
-        $totalKaryawan = User::where('role', 'employee')
-                             ->where('status', 'active')
-                             ->count();
+        // --- STATISTIK KARTU (Sama seperti sebelumnya) ---
+        $totalKaryawan = User::where('role', 'employee')->where('status', 'active')->count();
+        $hadir = AttendanceLog::whereDate('check_in', $todayString)->where('status', 'Tepat Waktu')->count();
+        $terlambat = AttendanceLog::whereDate('check_in', $todayString)->where('status', 'Terlambat')->count();
+        
+        // Logika Izin (Raw Query)
+        $izin = LeaveRequest::where('status', 'approved')
+            ->where(function($query) use ($todayString) {
+                $query->whereRaw("STR_TO_DATE(SUBSTRING_INDEX(duration, ' - ', 1), '%Y-%m-%d') <= ?", [$todayString])
+                      ->whereRaw("STR_TO_DATE(SUBSTRING_INDEX(duration, ' - ', -1), '%Y-%m-%d') >= ?", [$todayString]);
+            })->count();
 
-        $hadirLogs = AttendanceLog::with('user:id,name,position')
-                                    ->whereDate('check_in', $todayString)
-                                    ->where('status', 'Tepat Waktu')
-                                    ->get();
-                                    
-        $terlambatLogs = AttendanceLog::with('user:id,name,position')
-                                        ->whereDate('check_in', $todayString)
-                                        ->where('status', 'Terlambat')
-                                        ->get();
-
-        $izinSakitLogs = LeaveRequest::with('user:id,name,position') 
-                                        ->where('status', 'approved')
-                                        ->whereDate('start_date', '<=', $todayString)
-                                        ->whereDate('end_date', '>=', $todayString)
-                                        ->get();
-                                    
-        $aktivitasTerbaru = AttendanceLog::with('user:id,name,position') 
-                                        ->whereDate('check_in', $todayString)
-                                        ->latest('check_in') 
-                                        ->take(5) 
-                                        ->get();
-
-        $karyawanTerbaru = User::where('role', 'employee')
-                                ->latest('created_at') 
-                                ->take(5) 
-                                ->get(['id', 'name', 'position', 'created_at']);
+        // --- TAMBAHAN BARU: 5 Aktivitas Terakhir ---
+        // Kita ambil data log absensi hari ini, urutkan dari yang terbaru
+        $latestLogs = AttendanceLog::with('user') // Ambil relasi user agar muncul namanya
+                    ->whereDate('check_in', $todayString)
+                    ->orderBy('check_in', 'desc')
+                    ->take(5) // Ambil 5 saja
+                    ->get();
 
         return response()->json([
-            'summary' => [
-                'total_karyawan' => $totalKaryawan,
-                
-                'hadir_hari_ini' => [
-                    'count' => $hadirLogs->count(),
-                    'users' => $hadirLogs->map(fn($log) => $log->user)->unique('id')->values() 
-                ],
-                'terlambat_hari_ini' => [
-                    'count' => $terlambatLogs->count(),
-                    'users' => $terlambatLogs->map(fn($log) => $log->user)->unique('id')->values()
-                ],
-                'izin_sakit_hari_ini' => [
-                    'count' => $izinSakitLogs->count(),
-                    'users' => $izinSakitLogs->map(fn($log) => $log->user)->unique('id')->values()
-                ],
-            ],
-            'latest_activities' => $aktivitasTerbaru,
-            'newest_employees' => $karyawanTerbaru,
+            'total_karyawan' => $totalKaryawan,
+            'hadir' => $hadir,
+            'terlambat' => $terlambat,
+            'izin' => $izin,
+            'latest_activities' => $latestLogs // <--- Kirim ke Vue
         ]);
     }
-
     /**
      * Mengupdate data karyawan.
      */
@@ -469,6 +444,123 @@ class AdminController extends Controller
                                         ->get();
 
         return response()->json($requests);
+    }
+
+    public function dailyAttendance(Request $request)
+    {
+        $date = $request->date ? \Carbon\Carbon::parse($request->date) : \Carbon\Carbon::today();
+        $dateString = $date->toDateString();
+
+        // Ambil semua karyawan aktif
+        $employees = User::where('role', 'employee')->where('status', 'active')->get();
+        $positionsList = User::where('role', 'employee')
+                             ->distinct()
+                             ->pluck('position');
+
+        $data = [];
+        $stats = [
+            'total' => $employees->count(),
+            'hadir' => 0,
+            'izin' => 0,
+            'tidak_hadir' => 0
+        ];
+
+        foreach ($employees as $emp) {
+            $status = 'Tidak Hadir'; // Default
+            $jamMasuk = '-';
+            $jamPulang = '-';
+
+            // 1. Cek di Log Absensi
+            $log = AttendanceLog::where('user_id', $emp->id)
+                                ->whereDate('check_in', $dateString)
+                                ->first();
+            
+            if ($log) {
+                $status = 'Hadir'; // Bisa juga 'Terlambat' tergantung $log->status
+                if ($log->status === 'Terlambat') $status = 'Terlambat';
+                
+                $jamMasuk = \Carbon\Carbon::parse($log->check_in)->format('H:i');
+                $jamPulang = $log->check_out ? \Carbon\Carbon::parse($log->check_out)->format('H:i') : '-';
+                
+                $stats['hadir']++;
+            } else {
+                // 2. Jika tidak absen, Cek di Data Cuti
+                // (Menggunakan logika raw query yang sama seperti dashboard)
+                $leave = LeaveRequest::where('user_id', $emp->id)
+                    ->where('status', 'approved')
+                    ->where(function($query) use ($dateString) {
+                        $query->whereRaw("STR_TO_DATE(SUBSTRING_INDEX(duration, ' - ', 1), '%Y-%m-%d') <= ?", [$dateString])
+                              ->whereRaw("STR_TO_DATE(SUBSTRING_INDEX(duration, ' - ', -1), '%Y-%m-%d') >= ?", [$dateString]);
+                    })->first();
+
+                if ($leave) {
+                    $status = 'Izin/Sakit';
+                    $stats['izin']++;
+                } else {
+                    $stats['tidak_hadir']++;
+                }
+            }
+
+            // Masukkan ke array data
+            $data[] = [
+                'id' => $emp->id,
+                'name' => $emp->name,
+                'email' => $emp->email,
+                'position' => $emp->position,
+                'photo' => $emp->photo, 
+                'status' => $status,
+                'jam_masuk' => $jamMasuk,
+                'jam_pulang' => $jamPulang
+            ];
+        }
+
+        return response()->json([
+            'date' => $dateString,
+            'stats' => $stats,
+            'positions' => $positionsList,
+            'attendance_list' => $data
+        ]);
+    }
+
+    // Hapus Log Absensi Hari Ini (Reset jadi Tidak Hadir)
+    public function deleteAttendanceLog($userId)
+    {
+        $today = \Carbon\Carbon::today();
+        
+        $deleted = \App\Models\AttendanceLog::where('user_id', $userId)
+                    ->whereDate('check_in', $today)
+                    ->delete();
+
+        if ($deleted) {
+            return response()->json(['message' => 'Data absensi berhasil direset.']);
+        }
+
+        return response()->json(['message' => 'Tidak ada data absensi untuk dihapus.'], 404);
+    }
+
+    // UPDATE LOG BERDASARKAN USER ID (HARI INI)
+    public function updateAttendanceLogByUser(Request $request, $userId)
+    {
+        $request->validate([
+            'jam_masuk' => 'required',
+            'jam_pulang' => 'nullable',
+        ]);
+
+        $today = \Carbon\Carbon::today();
+
+        $log = \App\Models\AttendanceLog::where('user_id', $userId)
+                    ->whereDate('check_in', $today)
+                    ->firstOrFail();
+        
+        $date = \Carbon\Carbon::parse($log->check_in)->format('Y-m-d');
+        
+        $log->check_in = $date . ' ' . $request->jam_masuk;
+        if ($request->jam_pulang) {
+            $log->check_out = $date . ' ' . $request->jam_pulang;
+        }
+        $log->save();
+
+        return response()->json(['message' => 'Jam berhasil diperbarui.']);
     }
 
 }

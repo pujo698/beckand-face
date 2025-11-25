@@ -51,6 +51,12 @@ Route::middleware('auth:sanctum')->group(function () {
         
         // Log absensi
         Route::get('/attendance-logs', [AttendanceController::class, 'logs']);
+        // Daily attendance overview
+        Route::get('/daily-attendance', [AdminController::class, 'dailyAttendance']);
+        // hapus log absensi berdasarkan user ID
+        Route::delete('/attendance-log/{userId}', [AdminController::class, 'deleteAttendanceLog']);
+        // edit log absensi
+        Route::put('/attendance-log-by-user/{userId}', [AdminController::class, 'updateAttendanceLogByUser']);
 
         // Dashboard summary
         Route::get('/dashboard-summary', [AdminController::class, 'dashboardSummary']);
@@ -59,6 +65,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/leave-requests', [LeaveController::class, 'index']);
         Route::put('/leave-requests/{leaveRequest}/approve', [LeaveController::class, 'approve']);
         Route::put('/leave-requests/{leaveRequest}/reject', [LeaveController::class, 'reject']);
+        Route::get('/leave-requests-list', [LeaveController::class, 'index']); 
+        Route::put('/leave-requests/{id}/{status}', [LeaveController::class, 'updateStatus']);
 
         // Pengajuan lembur (approve/reject)
         Route::get('/overtimes', [OvertimeController::class, 'index']);

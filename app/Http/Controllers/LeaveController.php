@@ -8,9 +8,10 @@ use Illuminate\Support\Facades\Auth;
 
 class LeaveController extends Controller
 {
-    /**
-     * Karyawan membuat permohonan izin baru.
-     */
+    // ==========================================================
+    // 1. BAGIAN EMPLOYEE (Karyawan) - TETAP SAMA
+    // ==========================================================
+
     public function store(Request $request)
     {
         $request->validate([
@@ -42,104 +43,101 @@ class LeaveController extends Controller
         return response()->json(['message' => 'Permohonan izin berhasil diajukan.', 'data' => $leaveRequest], 201);
     }
 
-    /**
-     * Karyawan melihat riwayat permohonan izin miliknya.
-     */
     public function history(Request $request)
     {
         $query = Auth::user()->leaveRequests()->latest();
-
-        // Tambahkan filter status jika ada parameter 'status' di URL
         if ($request->has('status') && $request->status !== 'semua') {
             $query->where('status', $request->status);
         }
-
         return $query->get();
     }
 
-    /**
-     * Karyawan melihat detail satu permohonan izin.
-     */
     public function show(LeaveRequest $leaveRequest)
     {
         if ($leaveRequest->user_id !== Auth::id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
-
         $leaveRequest->load('approver:id,name');
-
         return response()->json($leaveRequest);
     }
 
+    // ==========================================================
+    // 2. BAGIAN ADMIN (RESTful Standard) - UPDATED
+    // ==========================================================
+
     /**
-     * Admin melihat semua permohonan izin.
+     * Admin: Menampilkan daftar cuti BESERTA statistik.
+     * Method: GET /api/admin/leave-requests
      */
     public function index(Request $request)
     {
+        // A. Query Data Utama
         $query = LeaveRequest::with('user:id,name,position')->latest();
 
-        // Filter berdasarkan status (approved/rejected/pending)
+        // Filter Status
         if ($request->has('status') && in_array($request->status, ['approved', 'rejected', 'pending'])) {
             $query->where('status', $request->status);
         }
+        // Filter Jenis
+        if ($request->filled('type') && $request->type !== 'Semua Jenis') {
+            $query->where('type', $request->type);
+        }
 
-        // Filter berdasarkan nama karyawan
+        // Filter Search Nama
+        if ($request->has('search')) { // Frontend kita pakai param 'search'
+            $query->whereHas('user', function ($q) use ($request) {
+                $q->where('name', 'like', '%' . $request->search . '%');
+            });
+        }
+
+        // (Filter tambahan Anda tetap saya pertahankan, bagus untuk pengembangan nanti)
         if ($request->has('name')) {
             $query->whereHas('user', function ($q) use ($request) {
                 $q->where('name', 'like', '%' . $request->name . '%');
             });
         }
-
-        // Filter berdasarkan jabatan
-        if ($request->has('position')) {
-            $query->whereHas('user', function ($q) use ($request) {
-                $q->where('position', 'like', '%' . $request->position . '%');
-            });
-        }
-
-        // Filter berdasarkan tipe izin
-        if ($request->has('type') && in_array($request->type, ['izin', 'cuti', 'sakit'])) {
+        if ($request->has('type')) {
             $query->where('type', $request->type);
         }
 
-        // Filter berdasarkan jenis absensi/durasi
-        if ($request->has('duration')) {
-            $query->where('duration', 'like', '%' . $request->duration . '%');
-        }
+        $leaves = $query->get();
 
-        // 🔹 Filter berdasarkan ketepatan waktu pengajuan (tepat_waktu / terlambat)
-        if ($request->has('timing') && in_array($request->timing, ['tepat_waktu', 'terlambat'])) {
-            if ($request->timing === 'tepat_waktu') {
-                $query->whereColumn('created_at', '<=', 'start_date');
-            } elseif ($request->timing === 'terlambat') {
-                $query->whereColumn('created_at', '>', 'start_date');
-            }
-        }
+        // B. Hitung Statistik (Untuk 4 Kartu di Dashboard Web)
+        // Kita hitung semua data tanpa filter agar kartu statistik tetap menunjukkan total keseluruhan
+        $stats = [
+            'total'    => LeaveRequest::count(),
+            'pending'  => LeaveRequest::where('status', 'pending')->count(),
+            'approved' => LeaveRequest::where('status', 'approved')->count(),
+            'rejected' => LeaveRequest::where('status', 'rejected')->count(),
+        ];
 
-        return $query->get();
+        // C. Return Format Gabungan
+        return response()->json([
+            'stats'  => $stats,
+            'leaves' => $leaves
+        ]);
     }
 
     /**
-     * Admin menyetujui permohonan izin.
+     * Admin: Mengubah status (Approve/Reject)
+     * Method: PUT /api/admin/leave-requests/{id}/status
      */
-    public function approve(LeaveRequest $leaveRequest)
+    public function updateStatus(Request $request, $id)
     {
-        $leaveRequest->update([
-            'status' => 'approved',
-            'approved_by' => Auth::id(),
+        $request->validate([
+            'status' => 'required|in:approved,rejected'
         ]);
-        return response()->json(['message' => 'Permohonan izin disetujui.', 'data' => $leaveRequest]);
-    }
 
-    /**
-     * Admin menolak permohonan izin.
-     */
-    public function reject(LeaveRequest $leaveRequest)
-    {
+        $leaveRequest = LeaveRequest::findOrFail($id);
+
         $leaveRequest->update([
-            'status' => 'rejected',
-            'approved_by' => Auth::id(),
+            'status' => $request->status,
+            'approved_by' => Auth::id(), // Otomatis catat siapa yang approve
         ]);
-        return response()->json(['message' => 'Permohonan izin ditolak.', 'data' => $leaveRequest]);
+
+        return response()->json([
+            'message' => 'Status permohonan berhasil diperbarui menjadi ' . $request->status,
+            'data' => $leaveRequest
+        ]);
     }
 }

@@ -71,39 +71,33 @@ class LeaveController extends Controller
      */
     public function index(Request $request)
     {
-        // A. Query Data Utama
+        // A. Query Dasar
         $query = LeaveRequest::with('user:id,name,position')->latest();
 
-        // Filter Status
-        if ($request->has('status') && in_array($request->status, ['approved', 'rejected', 'pending'])) {
+        // 1. Filter Status
+        // Hanya jalan jika status yang dikirim adalah: pending, approved, atau rejected
+        if ($request->filled('status') && in_array($request->status, ['pending', 'approved', 'rejected'])) {
             $query->where('status', $request->status);
         }
-        // Filter Jenis
+
+        // 2. Filter Jenis Cuti (Perbaikan Logic)
+        // Hanya jalan jika type terisi DAN bukan 'Semua Jenis'
         if ($request->filled('type') && $request->type !== 'Semua Jenis') {
             $query->where('type', $request->type);
         }
 
-        // Filter Search Nama
-        if ($request->has('search')) { // Frontend kita pakai param 'search'
+        // 3. Filter Search Nama (PENTING: Pakai filled, bukan has)
+        // Ini mencegah query jalan saat search box kosong
+        if ($request->filled('search')) {
             $query->whereHas('user', function ($q) use ($request) {
                 $q->where('name', 'like', '%' . $request->search . '%');
             });
         }
 
-        // (Filter tambahan Anda tetap saya pertahankan, bagus untuk pengembangan nanti)
-        if ($request->has('name')) {
-            $query->whereHas('user', function ($q) use ($request) {
-                $q->where('name', 'like', '%' . $request->name . '%');
-            });
-        }
-        if ($request->has('type')) {
-            $query->where('type', $request->type);
-        }
-
+        // Ambil Data
         $leaves = $query->get();
 
-        // B. Hitung Statistik (Untuk 4 Kartu di Dashboard Web)
-        // Kita hitung semua data tanpa filter agar kartu statistik tetap menunjukkan total keseluruhan
+        // B. Hitung Statistik (Tetap sama)
         $stats = [
             'total'    => LeaveRequest::count(),
             'pending'  => LeaveRequest::where('status', 'pending')->count(),
@@ -111,7 +105,6 @@ class LeaveController extends Controller
             'rejected' => LeaveRequest::where('status', 'rejected')->count(),
         ];
 
-        // C. Return Format Gabungan
         return response()->json([
             'stats'  => $stats,
             'leaves' => $leaves

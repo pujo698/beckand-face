@@ -19,18 +19,36 @@ class AdminController extends Controller
      */
     public function index(Request $request)
     {
+
         $query = User::where('role', 'employee')->latest();
 
-        if ($request->has('position')) {
-            $query->where('position', 'like', '%' . $request->position . '%');
+        // 2. Filter Position (Jabatan)
+        if ($request->filled('position') && $request->position !== 'Semua Jabatan') {
+            $query->where('position', $request->position);
         }
-        if ($request->has('status')) {
+
+        // 3. Filter Status
+        if ($request->filled('status') && $request->status !== 'Semua Status') {
             $query->where('status', $request->status);
         }
+
+        // 4. Filter Search Nama
         if ($request->filled('name')) {
             $query->where('name', 'like', '%' . $request->name . '%');
         }
-        return $query->get();
+
+        $employees = $query->get();
+
+        // 5. Ambil List Jabatan Unik (Untuk Dropdown Frontend)
+        $positionsList = User::where('role', 'employee')
+                             ->distinct()
+                             ->pluck('position');
+
+        // Return JSON dengan format baru
+        return response()->json([
+            'employees' => $employees,
+            'positions' => $positionsList
+        ]);
     }
 
     public function revokeUserTokens(User $user)
@@ -84,32 +102,48 @@ class AdminController extends Controller
         $today = \Carbon\Carbon::today();
         $todayString = $today->toDateString();
 
-        // --- STATISTIK KARTU (Sama seperti sebelumnya) ---
+        // 1. STATISTIK UTAMA (Kartu Atas)
         $totalKaryawan = User::where('role', 'employee')->where('status', 'active')->count();
         $hadir = AttendanceLog::whereDate('check_in', $todayString)->where('status', 'Tepat Waktu')->count();
         $terlambat = AttendanceLog::whereDate('check_in', $todayString)->where('status', 'Terlambat')->count();
         
-        // Logika Izin (Raw Query)
+        // Hitung Izin/Sakit hari ini
         $izin = LeaveRequest::where('status', 'approved')
             ->where(function($query) use ($todayString) {
                 $query->whereRaw("STR_TO_DATE(SUBSTRING_INDEX(duration, ' - ', 1), '%Y-%m-%d') <= ?", [$todayString])
                       ->whereRaw("STR_TO_DATE(SUBSTRING_INDEX(duration, ' - ', -1), '%Y-%m-%d') >= ?", [$todayString]);
             })->count();
 
-        // --- TAMBAHAN BARU: 5 Aktivitas Terakhir ---
-        // Kita ambil data log absensi hari ini, urutkan dari yang terbaru
-        $latestLogs = AttendanceLog::with('user') // Ambil relasi user agar muncul namanya
-                    ->whereDate('check_in', $todayString)
-                    ->orderBy('check_in', 'desc')
-                    ->take(5) // Ambil 5 saja
-                    ->get();
+        // 2. AKTIVITAS TERBARU (5 Terakhir)
+        $latestActivities = AttendanceLog::with('user:id,name')
+            ->whereDate('check_in', $todayString)
+            ->latest('check_in')
+            ->take(5)
+            ->get();
+
+        // 3. PENGAJUAN IZIN TERBARU (3 Terakhir - Pending)
+        $latestLeaves = LeaveRequest::with('user:id,name')
+            ->where('status', 'pending')
+            ->latest()
+            ->take(3)
+            ->get();
+
+        // 4. KARYAWAN TERBARU (3 Terakhir bergabung)
+        $newestEmployees = User::where('role', 'employee')
+            ->latest('created_at')
+            ->take(3)
+            ->get(['id', 'name', 'photo', 'position']);
 
         return response()->json([
-            'total_karyawan' => $totalKaryawan,
-            'hadir' => $hadir,
-            'terlambat' => $terlambat,
-            'izin' => $izin,
-            'latest_activities' => $latestLogs // <--- Kirim ke Vue
+            'summary' => [
+                'total_karyawan' => $totalKaryawan,
+                'hadir' => $hadir,
+                'terlambat' => $terlambat,
+                'izin' => $izin
+            ],
+            'latest_activities' => $latestActivities,
+            'latest_leaves' => $latestLeaves,     // <--- Data Baru
+            'newest_employees' => $newestEmployees // <--- Data Baru
         ]);
     }
     /**
@@ -153,9 +187,60 @@ class AdminController extends Controller
      * Menampilkan data user spesifik.
      */
     public function show(User $user)
-    {
-        return response()->json($user);
-    }
+        {
+            // 1. Statistik Bulan Ini
+            $startOfYear = \Carbon\Carbon::now()->startOfYear();
+            $endOfYear = \Carbon\Carbon::now()->endOfYear();
+
+// 1. Hitung Hadir TAHUN INI
+            $hadirTahunIni = \App\Models\AttendanceLog::where('user_id', $user->id)
+                ->whereBetween('check_in', [$startOfYear, $endOfYear])
+                ->where('status', 'Tepat Waktu')
+                ->count();
+
+            // 2. Hitung Terlambat TAHUN INI
+            $terlambatTahunIni = \App\Models\AttendanceLog::where('user_id', $user->id)
+                ->whereBetween('check_in', [$startOfYear, $endOfYear])
+                ->where('status', 'Terlambat')
+                ->count();
+
+            // Hitung Sisa Cuti (Asumsi jatah tahunan 12 hari)
+            $cutiTerpakai = \App\Models\LeaveRequest::where('user_id', $user->id)
+                ->where('status', 'approved')
+                ->whereYear('created_at', \Carbon\Carbon::now()->year)
+                ->count(); // Atau sum duration jika duration berupa angka hari
+            $sisaCuti = 12 - $cutiTerpakai;
+
+            // 2. Data Grafik (Kehadiran 6 Bulan Terakhir)
+            $graphData = [];
+            $graphLabels = [];
+            
+            for ($i = 5; $i >= 0; $i--) {
+                $date = \Carbon\Carbon::now()->subMonths($i);
+                $monthName = $date->format('M'); // Jan, Feb, Mar
+                
+                $count = \App\Models\AttendanceLog::where('user_id', $user->id)
+                    ->whereYear('check_in', $date->year)
+                    ->whereMonth('check_in', $date->month)
+                    ->count();
+                
+                $graphLabels[] = $monthName;
+                $graphData[] = $count;
+            }
+
+            return response()->json([
+                'user' => $user,
+                'stats' => [
+                    'hadir' => $hadirTahunIni,
+                    'terlambat' => $terlambatTahunIni,
+                    'sisa_cuti' => $sisaCuti
+                ],
+                'graph' => [
+                    'labels' => $graphLabels,
+                    'data' => $graphData
+                ]
+            ]);
+        }
 
     // ==============================================================
     // FUNGSI REKAP ABSENSI (TEPAT WAKTU, TERLAMBAT, CUTI/IZIN, ALFA)
@@ -501,6 +586,9 @@ class AdminController extends Controller
                 }
             }
 
+            $lat = $log ? $log->latitude : null;
+            $long = $log ? $log->longitude : null;
+
             // Masukkan ke array data
             $data[] = [
                 'id' => $emp->id,
@@ -510,7 +598,9 @@ class AdminController extends Controller
                 'photo' => $emp->photo, 
                 'status' => $status,
                 'jam_masuk' => $jamMasuk,
-                'jam_pulang' => $jamPulang
+                'jam_pulang' => $jamPulang,
+                'latitude' => $lat,
+                'longitude' => $long,
             ];
         }
 

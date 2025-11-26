@@ -57,6 +57,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/attendance-log/{userId}', [AdminController::class, 'deleteAttendanceLog']);
         // edit log absensi
         Route::put('/attendance-log-by-user/{userId}', [AdminController::class, 'updateAttendanceLogByUser']);
+        // rekapitulasi absensi berdasarkan rentang tanggal
+        Route::get('/attendance/recap', [AdminController::class, 'attendanceRecapByDateRange']);
 
         // Dashboard summary
         Route::get('/dashboard-summary', [AdminController::class, 'dashboardSummary']);
@@ -69,19 +71,19 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/leave-requests/{id}/{status}', [LeaveController::class, 'updateStatus']);
 
         // Pengajuan lembur (approve/reject)
-        Route::get('/overtimes', [OvertimeController::class, 'index']);
-        Route::put('/overtimes/{overtime}/approve', [OvertimeController::class, 'approve']);
-        Route::put('/overtimes/{overtime}/reject', [OvertimeController::class, 'reject']);
+        // Route::get('/overtimes', [OvertimeController::class, 'index']);
+        // Route::put('/overtimes/{overtime}/approve', [OvertimeController::class, 'approve']);
+        // Route::put('/overtimes/{overtime}/reject', [OvertimeController::class, 'reject']);
 
         // Kelola Shift
-        Route::get('/shifts', [ShiftController::class, 'index']);
-        Route::post('/shifts', [ShiftController::class, 'store']);
-        Route::put('/shifts/{shift}', [ShiftController::class, 'update']);
-        Route::delete('/shifts/{shift}', [ShiftController::class, 'destroy']);
+        // Route::get('/shifts', [ShiftController::class, 'index']);
+        // Route::post('/shifts', [ShiftController::class, 'store']);
+        // Route::put('/shifts/{shift}', [ShiftController::class, 'update']);
+        // Route::delete('/shifts/{shift}', [ShiftController::class, 'destroy']);
 
         // Kelola Jadwal Kerja
-        Route::post('/schedules', [ScheduleController::class, 'store']);
-        Route::delete('/schedules/user/{user}/date/{date}', [ScheduleController::class, 'destroy']);
+        // Route::post('/schedules', [ScheduleController::class, 'store']);
+        // Route::delete('/schedules/user/{user}/date/{date}', [ScheduleController::class, 'destroy']);
 
         // laporan 
         Route::get('/reports/attendance', [ReportController::class, 'exportAttendance']);
@@ -92,7 +94,9 @@ Route::middleware('auth:sanctum')->group(function () {
         // Kelola Izin Dinas Luar
         Route::get('/on-duty-authorizations', [OnDutyAuthorizationController::class, 'index']);
         Route::post('/on-duty-authorizations', [OnDutyAuthorizationController::class, 'store']);
+        Route::put('/on-duty-authorizations/{onDutyAuthorization}', [OnDutyAuthorizationController::class, 'update']);
         Route::delete('/on-duty-authorizations/{onDutyAuthorization}', [OnDutyAuthorizationController::class, 'destroy']);
+        // Route::put('/on-duty-authorizations/{id}', [OnDutyAuthorizationController::class, 'update']);
 
         // Kelola Hari Libur
         Route::get('/holidays', [HolidayController::class, 'index']);

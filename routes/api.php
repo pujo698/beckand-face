@@ -57,6 +57,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/attendance-log/{userId}', [AdminController::class, 'deleteAttendanceLog']);
         // edit log absensi
         Route::put('/attendance-log-by-user/{userId}', [AdminController::class, 'updateAttendanceLogByUser']);
+        // 
+        // Route::put('/attendance-log-by-user/{userId}', [App\Http\Controllers\AdminController::class, 'updateAttendanceLogByUser']);
+        
+        // Rute untuk Hapus Absensi (Reset)
+        Route::delete('/attendance-log/{userId}', [App\Http\Controllers\AdminController::class, 'deleteAttendanceLog']);
         // rekapitulasi absensi berdasarkan rentang tanggal
         Route::get('/attendance/recap', [AdminController::class, 'attendanceRecapByDateRange']);
 
@@ -114,6 +119,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // admin mengganti password karyawan
         Route::post('/users/{user}/set-password', [AdminController::class, 'setPassword']);
+
+        // Generate AI Performance Review Summary
+        Route::get('/users/{id}/ai-analytics', [AdminController::class, 'aiAnalytics']);
     }); 
 
     // ==============================

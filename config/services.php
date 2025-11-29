@@ -34,5 +34,10 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+    'office' => [
+        'latitude'  => env('OFFICE_LATITUDE', -7.038456829277736),
+        'longitude' => env('OFFICE_LONGITUDE', 110.47972470921351),
+        'radius_km' => env('OFFICE_RADIUS_KM', 0.2),
+    ],
 
 ];

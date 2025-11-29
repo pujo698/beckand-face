@@ -38,6 +38,9 @@ class AttendanceLog extends Model
         'status',
         'latitude',
         'longitude',
+        'risk_score',
+        'risk_note', 
+        'device_info'
     ];
 
         protected $casts = [

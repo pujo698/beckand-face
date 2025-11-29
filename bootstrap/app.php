@@ -32,4 +32,49 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
-    })->create();
+    })
+    ->withSchedule(function (Illuminate\Console\Scheduling\Schedule $schedule) {
+
+        $schedule->call(function () {
+
+            $today = now()->format('Y-m-d');
+
+            $employees = \App\Models\User::where('role', 'employee')
+                ->where('status', 'active')
+                ->get();
+
+            foreach ($employees as $employee) {
+
+                if (\App\Models\AttendanceSummary::where('user_id',$employee->id)->where('date',$today)->exists()) {
+                    continue;
+                }
+
+                $log = \App\Models\AttendanceLog::where('user_id',$employee->id)
+                    ->whereDate('check_in',$today)
+                    ->first();
+
+                $leave = \App\Models\LeaveRequest::where('user_id',$employee->id)
+                    ->where('status','approved')
+                    ->whereRaw("? BETWEEN STR_TO_DATE(SUBSTRING_INDEX(duration,' - ',1),'%Y-%m-%d')
+                                    AND STR_TO_DATE(SUBSTRING_INDEX(duration,' - ',-1),'%Y-%m-%d')", [$today])
+                    ->first();
+
+                $status = 'alfa';
+
+                if ($log) {
+                    $status = $log->status === 'Terlambat' ? 'terlambat' : 'hadir';
+                } elseif ($leave) {
+                    $status = strtolower($leave->type) ?? 'izin';
+                }
+
+                \App\Models\AttendanceSummary::create([
+                    'user_id' => $employee->id,
+                    'date' => $today,
+                    'status' => $status
+                ]);
+            }
+
+        })->dailyAt('23:59');
+
+    })
+    ->create();

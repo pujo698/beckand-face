@@ -174,7 +174,7 @@ class EmployeeController extends Controller
 
                 if ($isOnLeave) {
                     $status = 'Cuti';
-                } elseif ($date->isPast() || $date->isToday()) {
+                } elseif (($date->isPast() || $date->isToday()) && $date->greaterThanOrEqualTo($joinDate)) {
                     $status = 'Alfa';
                 }
             }

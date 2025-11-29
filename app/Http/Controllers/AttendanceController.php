@@ -10,7 +10,9 @@ use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use App\Models\UserSchedule;
 use App\Traits\Haversine;
-use App\Models\Holiday; // Pastikan ini ada
+use App\Models\Holiday;
+
+use App\Services\FraudDetectionService;
 
 class AttendanceController extends Controller
 {
@@ -25,54 +27,62 @@ class AttendanceController extends Controller
 
         $user = Auth::user();
         $today = Carbon::today()->toDateString();
-
-        // ✅ CEK HARI LIBUR NASIONAL ATAU CUTI BERSAMA
+        // 1. CEK HARI LIBUR (Dari Tabel Holidays)
         $holiday = Holiday::whereDate('date', $today)->first();
         if ($holiday) {
             return response()->json([
                 'message' => "Hari ini adalah {$holiday->description}. Anda tidak perlu melakukan presensi.",
-                // 'type'    => $holiday->type ?? 'nasional', // Hapus jika tabel tidak punya kolom type
                 'status'  => 'libur'
             ], 200);
         }
 
-        // ✅ CEK IZIN DINAS LUAR
+        // 2. CEK DUPLIKAT
+        if ($user->attendanceLogs()->whereDate('check_in', $today)->exists()) {
+            return response()->json(['message' => 'Anda sudah melakukan check-in hari ini.'], 409);
+        }
+
+        // 3. CEK IZIN DINAS
         $hasOnDutyAuth = OnDutyAuthorization::where('user_id', $user->id)
-            ->where('start_date', '<=', $today)
-            ->where('end_date', '>=', $today)
+            ->where('status', 'approved') 
+            ->whereDate('start_date', '<=', $today)
+            ->whereDate('end_date', '>=', $today)
             ->exists();
 
-        // ✅ CEK LOKASI (jika tidak dinas luar)
+        // 4. CEK RADIUS MANUAL
         if (!$hasOnDutyAuth) {
             $officeLat = env('OFFICE_LATITUDE');
             $officeLon = env('OFFICE_LONGITUDE');
             $allowedRadius = env('ALLOWED_RADIUS_METERS');
 
-            if (is_null($officeLat) || is_null($officeLon) || is_null($allowedRadius)) {
-                \Log::warning('OFFICE_* env missing, skip radius check.');
-            } else {
-                $distance = $this->calculateDistance(
+            if ($officeLat && $officeLon && $allowedRadius) {
+                $distanceKm = $this->calculateDistance(
                     (float) $request->latitude,
                     (float) $request->longitude,
                     (float) $officeLat,
                     (float) $officeLon
                 );
+                
+                $distanceMeters = $distanceKm * 1000;
 
-                if ($distance > (float) $allowedRadius) {
+                if ($distanceMeters > (float) $allowedRadius) {
                     return response()->json([
                         'message'  => 'Anda berada di luar radius lokasi kerja yang diizinkan.',
-                        'distance' => round($distance, 2)
+                        'distance' => round($distanceMeters, 0) . ' meter'
                     ], 403);
                 }
             }
         }
 
-        // ✅ CEGAH CHECK-IN GANDA
-        if ($user->attendanceLogs()->whereDate('check_in', $today)->exists()) {
-            return response()->json(['message' => 'Anda sudah melakukan check-in hari ini.'], 409);
-        }
+        // 5. HITUNG FRAUD SCORE
+        $fraudService = new FraudDetectionService();
+        $analysis = $fraudService->analyzeCheckIn(
+            $user, 
+            $request->latitude, 
+            $request->longitude,
+            $request->header('User-Agent')
+        );
 
-        // ✅ TENTUKAN STATUS (TEPAT WAKTU / TERLAMBAT)
+        // 6. CEK JADWAL SHIFT
         $todaySchedule = UserSchedule::where('user_id', $user->id)
             ->where('date', $today)
             ->with('shift')
@@ -87,24 +97,39 @@ class AttendanceController extends Controller
                 $status = 'Terlambat';
             }
         } else {
-            $entryDeadline = now()->setHour(10)->setMinute(0)->setSecond(0);
+            $entryDeadline = Carbon::today()->setHour(9)->setMinute(0); 
             if ($currentTime->isAfter($entryDeadline)) {
                 $status = 'Terlambat';
             }
         }
 
-        // ✅ SIMPAN DATA ABSENSI
+        // 7. SIMPAN DATA
         $log = $user->attendanceLogs()->create([
-            'check_in'  => now(),
-            'status'    => $status,
-            'latitude'  => $request->latitude,
-            'longitude' => $request->longitude,
+            'check_in'    => now(),
+            'status'      => $status,
+            'latitude'    => $request->latitude,
+            'longitude'   => $request->longitude,
+            
+            // Simpan Data AI
+            'risk_score'  => $analysis['score'],
+            'risk_note'   => $analysis['note'],
+            'device_info' => $request->header('User-Agent'),
         ]);
 
         return response()->json([
             'message' => "Check-in berhasil. Status: {$status}",
             'data' => $log
         ], 201);
+    }
+
+    // Fungsi Helper Jarak
+    private function calculateDistance($lat1, $lon1, $lat2, $lon2) {
+        $earthRadius = 6371; 
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLon = deg2rad($lon2 - $lon1);
+        $a = sin($dLat/2) * sin($dLat/2) + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLon/2) * sin($dLon/2);
+        $c = 2 * atan2(sqrt($a), sqrt(1-$a));
+        return $earthRadius * $c;
     }
 
     public function checkOut(Request $request)
@@ -118,10 +143,9 @@ class AttendanceController extends Controller
         return response()->json(['message' => 'Check-out berhasil.', 'data' => $log]);
     }
 
-    // Fungsi logs() Anda sebelumnya punya kode filter yang di-komen, saya perbaiki:
-    public function logs(Request $request) // Tambahkan Request $request
+    public function logs(Request $request)
     {
-        $query = AttendanceLog::with('user:id,name,email')->latest(); // Mulai query
+        $query = AttendanceLog::with('user:id,name,email')->latest();
 
         if ($request->has('name')) {
             $query->whereHas('user', function ($q) use ($request) {
@@ -129,15 +153,12 @@ class AttendanceController extends Controller
             });
         }
 
-        // Koreksi typo: 'strart_date' menjadi 'start_date'
         if ($request->has('start_date') && $request->has('end_date')) {
-            // Pastikan format tanggal benar sebelum query
             try {
                  $startDate = Carbon::parse($request->start_date)->startOfDay();
                  $endDate = Carbon::parse($request->end_date)->endOfDay();
                  $query->whereBetween('check_in', [$startDate, $endDate]);
             } catch (\Exception $e) {
-                 // Abaikan filter tanggal jika format salah
                  \Log::warning('Format tanggal filter logs salah: ' . $e->getMessage());
             }
         }
@@ -146,10 +167,9 @@ class AttendanceController extends Controller
             $query->where('status', $request->status);
         }
 
-        return $query->paginate(20); // Jalankan query
+        return $query->paginate(20);
     }
 
-    // Riwayat absensi user (tidak perlu diubah)
     public function history(Request $request)
     {
         $request->validate([
@@ -164,11 +184,6 @@ class AttendanceController extends Controller
             ->get();
     }
 
-    /**
-     * ================================================================
-     * FUNGSI getAttendanceCalendar (SUDAH DIMODIFIKASI)
-     * ================================================================
-     */
     public function getAttendanceCalendar(Request $request)
     {
         $request->validate([
@@ -180,88 +195,82 @@ class AttendanceController extends Controller
         $month = $request->month;
         $year = $request->year;
 
-        // Ambil data log absensi user
+        $joinDate = Carbon::parse($user->created_at)->startOfDay();
+
         $logs = $user->attendanceLogs()
-            ->whereMonth('check_in', $month)->whereYear('check_in', $year)
+            ->whereMonth('check_in', $month)
+            ->whereYear('check_in', $year)
             ->get()
             ->keyBy(fn($log) => Carbon::parse($log->check_in)->format('Y-m-d'));
 
-        // Ambil data cuti user yang disetujui
         $leaves = $user->leaveRequests()->where('status', 'approved')->get();
 
-        // ================================================================
-        // PERUBAHAN 1: Ambil tanggal DAN deskripsi holiday
-        // ================================================================
         $holidays = Holiday::whereMonth('date', $month)
-                           ->whereYear('date', $year)
-                           ->get()
-                           ->keyBy(fn($holiday) => Carbon::parse($holiday->date)->format('Y-m-d')); // Key = Tanggal
+            ->whereYear('date', $year)
+            ->get()
+            ->keyBy(fn($holiday) => Carbon::parse($holiday->date)->format('Y-m-d'));
 
-        // Periode bulan yang diminta
-        $period = CarbonPeriod::create(Carbon::create($year, $month)->startOfMonth(), Carbon::create($year, $month)->endOfMonth());
+        $period = CarbonPeriod::create(
+            Carbon::create($year, $month)->startOfMonth(),
+            Carbon::create($year, $month)->endOfMonth()
+        );
+
         $calendarData = [];
+        $dailyStatuses = [];
 
-        // Loop setiap hari
         foreach ($period as $date) {
+
             $dateString = $date->format('Y-m-d');
-            // Tambahkan field 'description' ke $dayData
-            $dayData = ['date' => $dateString, 'check_in' => null, 'check_out' => null, 'status' => null, 'description' => null];
+
+            // ⛔ Abaikan semua tanggal sebelum karyawan dibuat
+            if ($date->lt($joinDate)) {
+                continue;
+            }
+
+            $day = [
+                'date' => $dateString,
+                'status' => null,
+            ];
 
             if ($logs->has($dateString)) {
-                // Jika ada log absensi di hari ini
-                $log = $logs[$dateString];
-                // Format waktu ke HH:mm:ss atau null jika belum checkout
-                $dayData['check_in'] = Carbon::parse($log->check_in)->format('H:i:s');
-                $dayData['check_out'] = $log->check_out ? Carbon::parse($log->check_out)->format('H:i:s') : null;
-                $dayData['status'] = $log->status; // 'Tepat Waktu' atau 'Terlambat'
+                $day['status'] = $logs[$dateString]->status;
 
-            // ================================================================
-            // PERUBAHAN 2: Prioritaskan cek Holiday sebelum Weekend
-            // ================================================================
-            } else if ($holidays->has($dateString)) {
-                // Jika hari ini ada di tabel holidays
-                $dayData['status'] = 'Libur';
-                $dayData['description'] = $holidays[$dateString]->description; // Ambil deskripsi
+            } elseif ($holidays->has($dateString)) {
+                $day['status'] = 'Libur';
 
-            } else if ($date->isWeekend()) {
-                // Jika hari ini akhir pekan (dan BUKAN holiday)
-                $dayData['status'] = 'Libur';
-                $dayData['description'] = 'Akhir Pekan'; // Deskripsi default
+            } elseif ($date->isWeekend()) {
+                $day['status'] = 'Libur';
 
             } else {
-                // Cek Cuti
                 $isOnLeave = $leaves->first(function ($leave) use ($date) {
-                     // Logika cek rentang cuti Anda sudah benar
-                     $durationParts = explode(' - ', $leave->duration);
-                     if (count($durationParts) === 2) {
-                          try {
-                               $startLeave = Carbon::parse($durationParts[0])->startOfDay();
-                               $endLeave = Carbon::parse($durationParts[1])->endOfDay();
-                               return $date->betweenIncluded($startLeave, $endLeave);
-                          } catch (\Exception $e) { return false; } // Tangani format durasi salah
-                     }
-                     // Handle jika format durasi hanya satu tanggal (opsional)
-                     else if (count($durationParts) === 1) {
-                          try {
-                               return Carbon::parse($durationParts[0])->isSameDay($date);
-                          } catch (\Exception $e) { return false; }
-                     }
-                     return false;
+                    $range = explode(' - ', $leave->duration);
+                    return count($range) === 2 &&
+                        $date->between(
+                            Carbon::parse($range[0]),
+                            Carbon::parse($range[1])
+                        );
                 });
 
                 if ($isOnLeave) {
-                    // Jika user sedang cuti
-                    // Gunakan tipe cuti (izin/cuti/sakit) sebagai status
-                    $dayData['status'] = ucfirst($isOnLeave->type ?? 'Izin'); // 'Cuti', 'Sakit', 'Izin'
-                    $dayData['description'] = $isOnLeave->reason; // Ambil alasan cuti sebagai deskripsi
-                } else if ($date->isPast() || $date->isToday()) {
-                    // Jika bukan libur, bukan weekend, tidak cuti, dan sudah lewat
-                    $dayData['status'] = 'Alfa';
+                    $day['status'] = 'Cuti';
+                } elseif ($date->isPast() || $date->isToday()) {
+                    $day['status'] = 'Alfa';
                 }
-                // Jika bukan semua di atas (hari kerja di masa depan), status tetap null
             }
-            $calendarData[] = $dayData;
+
+            $calendarData[] = $day;
+
+            if ($day['status']) {
+                $dailyStatuses[] = $day['status'];
+            }
         }
-        return response()->json($calendarData);
+
+        return response()->json([
+            'calendar' => $calendarData,
+            'summary' => array_count_values($dailyStatuses),
+            'join_date_used' => $joinDate->toDateString()
+        ]);
     }
+
+
 }

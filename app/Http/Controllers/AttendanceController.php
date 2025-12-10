@@ -184,6 +184,8 @@ class AttendanceController extends Controller
             ->get();
     }
 
+    // Mengambil data kalender presensi untuk bulan dan tahun tertentu
+    // Response format: array langsung dengan field date, check_in, check_out, status, description
     public function getAttendanceCalendar(Request $request)
     {
         $request->validate([
@@ -216,7 +218,6 @@ class AttendanceController extends Controller
         );
 
         $calendarData = [];
-        $dailyStatuses = [];
 
         foreach ($period as $date) {
 
@@ -227,21 +228,34 @@ class AttendanceController extends Controller
                 continue;
             }
 
+            // Inisialisasi struktur data sesuai format frontend
             $day = [
                 'date' => $dateString,
+                'check_in' => null,
+                'check_out' => null,
                 'status' => null,
+                'description' => null,
             ];
 
             if ($logs->has($dateString)) {
-                $day['status'] = $logs[$dateString]->status;
+                // Ada log presensi untuk tanggal ini
+                $log = $logs[$dateString];
+                $day['status'] = $log->status;
+                $day['check_in'] = $log->check_in ? Carbon::parse($log->check_in)->format('H:i:s') : null;
+                $day['check_out'] = $log->check_out ? Carbon::parse($log->check_out)->format('H:i:s') : null;
 
             } elseif ($holidays->has($dateString)) {
+                // Hari libur nasional
                 $day['status'] = 'Libur';
+                $day['description'] = $holidays[$dateString]->description;
 
             } elseif ($date->isWeekend()) {
+                // Weekend (Sabtu/Minggu)
                 $day['status'] = 'Libur';
+                $day['description'] = $date->dayOfWeek === 6 ? 'Hari Sabtu' : 'Hari Minggu';
 
             } else {
+                // Cek apakah sedang cuti
                 $isOnLeave = $leaves->first(function ($leave) use ($date) {
                     $range = explode(' - ', $leave->duration);
                     return count($range) === 2 &&
@@ -253,23 +267,17 @@ class AttendanceController extends Controller
 
                 if ($isOnLeave) {
                     $day['status'] = 'Cuti';
+                    $day['description'] = $isOnLeave->type ?? 'Cuti';
                 } elseif ($date->isPast() || $date->isToday()) {
                     $day['status'] = 'Alfa';
                 }
             }
 
             $calendarData[] = $day;
-
-            if ($day['status']) {
-                $dailyStatuses[] = $day['status'];
-            }
         }
 
-        return response()->json([
-            'calendar' => $calendarData,
-            'summary' => array_count_values($dailyStatuses),
-            'join_date_used' => $joinDate->toDateString()
-        ]);
+        // Return array langsung sesuai format yang diharapkan frontend
+        return response()->json($calendarData);
     }
 
 

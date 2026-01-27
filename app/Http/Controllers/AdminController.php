@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth; // Tambahkan untuk setPassword
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use App\Models\Holiday;
@@ -71,6 +72,13 @@ class AdminController extends Controller
      */
     public function store(Request $request)
     {
+        Log::info('AdminController::store called', [
+            'all' => $request->all(),
+            'files' => $request->allFiles(),
+            'has_photo' => $request->hasFile('photo'),
+            'content_type' => $request->header('Content-Type')
+        ]);
+
         $request->validate([
             'name'       => 'required|string|max:255',
             'email'      => 'required|string|email|max:255|unique:users',
@@ -156,6 +164,14 @@ class AdminController extends Controller
      */
     public function update(Request $request, User $user)
     {
+        Log::info('AdminController::update called', [
+            'user_id' => $user->id,
+            'all' => $request->all(),
+            'files' => $request->allFiles(),
+            'has_photo' => $request->hasFile('photo'),
+            'content_type' => $request->header('Content-Type')
+        ]);
+
         $request->validate([
             'name'     => 'required|string|max:255',
             'email'    => 'required|string|email|max:255|unique:users,email,' . $user->id,

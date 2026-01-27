@@ -8,7 +8,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
-use App\Models\UserSchedule;
 use App\Traits\Haversine;
 use App\Models\Holiday;
 
@@ -94,25 +93,13 @@ class AttendanceController extends Controller
             $request->header('User-Agent')
         );
 
-        // 7. CEK JADWAL SHIFT
-        $todaySchedule = UserSchedule::where('user_id', $user->id)
-            ->where('date', $today)
-            ->with('shift')
-            ->first();
-
+        // 7. CEK JAM TERLAMBAT (09:30)
         $status = 'Tepat Waktu';
         $currentTime = now();
-
-        if ($todaySchedule) {
-            $entryDeadline = Carbon::parse($todaySchedule->shift->start_time)->addMinutes(30);
-            if ($currentTime->isAfter($entryDeadline)) {
-                $status = 'Terlambat';
-            }
-        } else {
-            $entryDeadline = Carbon::today()->setHour(9)->setMinute(0); 
-            if ($currentTime->isAfter($entryDeadline)) {
-                $status = 'Terlambat';
-            }
+        $entryDeadline = Carbon::today()->setHour(9)->setMinute(30);
+        
+        if ($currentTime->isAfter($entryDeadline)) {
+            $status = 'Terlambat';
         }
 
         // 8. SIMPAN DATA

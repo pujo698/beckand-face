@@ -12,7 +12,6 @@ class ScheduleController extends Controller
     public function index(Request $request)
     {
         $schedules = Auth::user()->schedules()
-            ->with('shift') // Ambil juga detail shift-nya
             ->whereMonth('date', $request->query('month', now()->month))
             ->whereYear('date', $request->query('year', now()->year))
             ->get();
@@ -24,17 +23,13 @@ class ScheduleController extends Controller
     {
         $request->validate([
             'user_id'  => 'required|exists:users,id',
-            'shift_id' => 'required|exists:shifts,id',
             'date'     => 'required|date',
         ]);
 
         $schedule = UserSchedule::updateOrCreate(
             ['user_id' => $request->user_id, 
              'date' => $request->date],
-
-            [
-             'shift_id' => $request->shift_id
-            ]
+            []
         );
         return response()->json($schedule, 201);
     }

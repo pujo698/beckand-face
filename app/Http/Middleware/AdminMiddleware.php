@@ -12,7 +12,7 @@ class AdminMiddleware
     {
         $user = $request->user(); // ambil user dari token API
 
-        if ($user && $user->role === 'admin') {
+        if ($user && in_array($user->role, ['admin', 'super_admin'])) {
             return $next($request);
         }
 

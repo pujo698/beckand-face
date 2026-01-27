@@ -49,10 +49,11 @@ class EmployeeController extends Controller
         $request->validate([
             // 'name'  => 'sometimes|string|max:255',
             'phone' => 'sometimes|nullable|string',
+            'address' => 'sometimes|nullable|string',
             'photo' => 'sometimes|image|mimes:jpeg,png,jpg|max:2048',
         ]);
 
-        $userData = $request->only(['name', 'phone']);
+        $userData = $request->only(['name', 'phone', 'address']);
 
         if ($request->hasFile('photo')) {
             if ($user->photo) {

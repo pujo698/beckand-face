@@ -27,28 +27,40 @@ class AttendanceController extends Controller
 
         $user = Auth::user();
         $today = Carbon::today()->toDateString();
-        // 1. CEK HARI LIBUR (Dari Tabel Holidays)
+        $todayCarbon = Carbon::today();
+
+        // 1. CEK HARI WEEKEND (SABTU/MINGGU)
+        if ($todayCarbon->isWeekend()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tidak dapat melakukan presensi pada hari libur',
+                'detail' => $todayCarbon->dayOfWeek === 6 ? 'Hari Sabtu' : 'Hari Minggu'
+            ], 400);
+        }
+
+        // 2. CEK HARI LIBUR (Dari Tabel Holidays)
         $holiday = Holiday::whereDate('date', $today)->first();
         if ($holiday) {
             return response()->json([
-                'message' => "Hari ini adalah {$holiday->description}. Anda tidak perlu melakukan presensi.",
-                'status'  => 'libur'
-            ], 200);
+                'success' => false,
+                'message' => 'Tidak dapat melakukan presensi pada hari libur',
+                'detail' => $holiday->description
+            ], 400);
         }
 
-        // 2. CEK DUPLIKAT
+        // 3. CEK DUPLIKAT
         if ($user->attendanceLogs()->whereDate('check_in', $today)->exists()) {
             return response()->json(['message' => 'Anda sudah melakukan check-in hari ini.'], 409);
         }
 
-        // 3. CEK IZIN DINAS
+        // 4. CEK IZIN DINAS
         $hasOnDutyAuth = OnDutyAuthorization::where('user_id', $user->id)
             ->where('status', 'approved') 
             ->whereDate('start_date', '<=', $today)
             ->whereDate('end_date', '>=', $today)
             ->exists();
 
-        // 4. CEK RADIUS MANUAL
+        // 5. CEK RADIUS MANUAL
         if (!$hasOnDutyAuth) {
             $officeLat = env('OFFICE_LATITUDE');
             $officeLon = env('OFFICE_LONGITUDE');
@@ -73,7 +85,7 @@ class AttendanceController extends Controller
             }
         }
 
-        // 5. HITUNG FRAUD SCORE
+        // 6. HITUNG FRAUD SCORE
         $fraudService = new FraudDetectionService();
         $analysis = $fraudService->analyzeCheckIn(
             $user, 
@@ -82,7 +94,7 @@ class AttendanceController extends Controller
             $request->header('User-Agent')
         );
 
-        // 6. CEK JADWAL SHIFT
+        // 7. CEK JADWAL SHIFT
         $todaySchedule = UserSchedule::where('user_id', $user->id)
             ->where('date', $today)
             ->with('shift')
@@ -103,7 +115,7 @@ class AttendanceController extends Controller
             }
         }
 
-        // 7. SIMPAN DATA
+        // 8. SIMPAN DATA
         $log = $user->attendanceLogs()->create([
             'check_in'    => now(),
             'status'      => $status,
@@ -135,10 +147,34 @@ class AttendanceController extends Controller
     public function checkOut(Request $request)
     {
         $user = Auth::user();
-        $log = $user->attendanceLogs()->whereDate('check_in', Carbon::today())->whereNull('check_out')->first();
+        $today = Carbon::today()->toDateString();
+        $todayCarbon = Carbon::today();
+
+        // 1. CEK HARI WEEKEND (SABTU/MINGGU)
+        if ($todayCarbon->isWeekend()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tidak dapat melakukan presensi pada hari libur',
+                'detail' => $todayCarbon->dayOfWeek === 6 ? 'Hari Sabtu' : 'Hari Minggu'
+            ], 400);
+        }
+
+        // 2. CEK HARI LIBUR (Dari Tabel Holidays)
+        $holiday = Holiday::whereDate('date', $today)->first();
+        if ($holiday) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tidak dapat melakukan presensi pada hari libur',
+                'detail' => $holiday->description
+            ], 400);
+        }
+
+        // 3. CEK LOG CHECK-IN AKTIF
+        $log = $user->attendanceLogs()->whereDate('check_in', $todayCarbon)->whereNull('check_out')->first();
         if (!$log) {
             return response()->json(['message' => 'Tidak ditemukan data check-in aktif untuk hari ini.'], 404);
         }
+
         $log->update(['check_out' => now()]);
         return response()->json(['message' => 'Check-out berhasil.', 'data' => $log]);
     }

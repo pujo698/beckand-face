@@ -83,8 +83,8 @@ class User extends Authenticatable
     public function getPhotoUrlAttribute()
     {
         if ($this->photo) {
-            // Menggabungkan APP_URL dari config dengan path storage
-            return config('app.url') . Storage::url($this->photo);
+            // Mengembalikan URL lengkap dari Storage facade (sudah handle APP_URL dari config filesystems)
+            return Storage::url($this->photo);
         }
         // Jika tidak ada foto, kembalikan URL ke gambar default
         return 'https://ui-avatars.com/api/?name=' . urlencode($this->name) . '&background=random';

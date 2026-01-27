@@ -77,6 +77,7 @@ class AdminController extends Controller
             'position'   => 'required|string|max:255',
             'status'     => 'required|in:active,inactive',
             'phone'      => 'nullable|string',
+            'address'    => 'nullable|string', // Validasi alamat
             'password'   => 'required|string|min:8',
             'photo'      => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
         ]);
@@ -90,6 +91,7 @@ class AdminController extends Controller
             'name'       => $request->name,
             'email'      => $request->email,
             'phone'      => $request->phone,
+            'address'    => $request->address, // Simpan alamat
             'password'   => Hash::make($request->password),
             'role'       => 'employee',
             'position'   => $request->position,
@@ -160,9 +162,10 @@ class AdminController extends Controller
             'position' => 'required|string|max:255',
             'status'   => 'required|in:active,inactive',
             'phone'    => 'nullable|string',
+            'address'  => 'nullable|string',
         ]);
 
-        $user->update($request->only(['name', 'email', 'phone', 'position', 'status']));
+        $user->update($request->only(['name', 'email', 'phone', 'address', 'position', 'status']));
 
         if ($request->hasFile('photo')) {
             $request->validate(['photo' => 'image|mimes:jpeg,png,jpg|max:2048']);

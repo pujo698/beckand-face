@@ -93,9 +93,19 @@ class AttendanceController extends Controller
             $request->header('User-Agent')
         );
 
+        $currentTime = now();
+        $startTime = Carbon::today()->setHour(8)->setMinute(0);
+
+        // CEK JAM MASUK (Min 08:00)
+        if ($currentTime->isBefore($startTime)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Check-in baru bisa diterima mulai jam 08.00',
+            ], 400);
+        }
+
         // 7. CEK JAM TERLAMBAT (09:30)
         $status = 'Tepat Waktu';
-        $currentTime = now();
         $entryDeadline = Carbon::today()->setHour(9)->setMinute(30);
         
         if ($currentTime->isAfter($entryDeadline)) {
@@ -153,6 +163,15 @@ class AttendanceController extends Controller
                 'success' => false,
                 'message' => 'Tidak dapat melakukan presensi pada hari libur',
                 'detail' => $holiday->description
+            ], 400);
+        }
+
+        // CEK JAM KELUAR (Min 16:00)
+        $minCheckOutTime = Carbon::today()->setHour(16)->setMinute(0);
+        if (now()->isBefore($minCheckOutTime)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Check-out baru bisa dilakukan mulai jam 16.00',
             ], 400);
         }
 

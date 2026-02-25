@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Task;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -35,7 +36,9 @@ class TaskController extends Controller
     // --- UNTUK KARYAWAN ---
     public function myTasks()
     {
-        $tasks = Auth::user()->tasks()->latest()->get();
+        /** @var User $user */
+        $user = Auth::user();
+        $tasks = $user->tasks()->latest()->get();
         return response()->json($tasks);
     }
 
@@ -43,7 +46,10 @@ class TaskController extends Controller
     {
         $request->validate(['status' => 'required|in:in_progress,completed']);
 
-        Auth::user()->tasks()->updateExistingPivot($task->id, [
+        /** @var User $user */
+        $user = Auth::user();
+
+        $user->tasks()->updateExistingPivot($task->id, [
             'status' => $request->status,
         ]);
 

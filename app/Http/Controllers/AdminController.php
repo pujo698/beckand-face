@@ -572,7 +572,7 @@ class AdminController extends Controller
                         $leaveEndDate = $leaveStartDate->copy()->endOfDay(); 
                     }
                 } catch (\Throwable $e) { 
-                    \Log::warning("Format durasi cuti salah ID {$leave->id}: {$leave->duration}"); 
+                    Log::warning("Format durasi cuti salah ID {$leave->id}: {$leave->duration}"); 
                     continue; 
                 }
                 

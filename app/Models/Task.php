@@ -13,13 +13,11 @@ class Task extends Model
         'created_by',
     ];
 
-    // Relasi ke User (Admin yang membuat tugas)
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
     }
 
-    // Relasi many-to-many ke User (Karyawan yang ditugaskan)
     public function users()
     {
         return $this->belongsToMany(User::class)->withPivot('status')->withTimestamps();

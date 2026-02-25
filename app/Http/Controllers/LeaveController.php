@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\LeaveRequest;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Holiday;
@@ -34,7 +35,10 @@ class LeaveController extends Controller
             $originalName = $request->file('support_file')->getClientOriginalName();
         }
 
-        $leaveRequest = Auth::user()->leaveRequests()->create([
+        /** @var User $user */
+        $user = Auth::user();
+
+        $leaveRequest = $user->leaveRequests()->create([
             'reason' => $request->reason,
             'duration' => $request->duration,
             'type' => $request->type ?? 'izin',
@@ -49,7 +53,10 @@ class LeaveController extends Controller
 
     public function history(Request $request)
     {
-        $query = Auth::user()->leaveRequests()->latest();
+        /** @var User $user */
+        $user = Auth::user();
+
+        $query = $user->leaveRequests()->latest();
 
         if ($request->has('status') && $request->status !== 'semua') {
             $query->where('status', $request->status);

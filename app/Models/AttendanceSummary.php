@@ -7,8 +7,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AttendanceSummary extends Model
 {
-    // protected $table = 'attendance_summary';
-
     protected $fillable = [
         'user_id',
         'date',

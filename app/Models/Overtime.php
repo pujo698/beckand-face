@@ -20,17 +20,11 @@ class Overtime extends Model
         'approved_by',
     ];
 
-    /**
-     * Relasi ke user yang mengajukan lembur.
-     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
     }
 
-    /**
-     * Relasi ke admin yang menyetujui.
-     */
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');

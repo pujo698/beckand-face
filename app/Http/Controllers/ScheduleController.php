@@ -3,15 +3,18 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use App\Models\UserSchedule;
-use App\Models\User;
 
 class ScheduleController extends Controller
 {
     public function index(Request $request)
     {
-        $schedules = Auth::user()->schedules()
+        /** @var User $user */
+        $user = Auth::user();
+
+        $schedules = $user->schedules()
             ->whereMonth('date', $request->query('month', now()->month))
             ->whereYear('date', $request->query('year', now()->year))
             ->get();

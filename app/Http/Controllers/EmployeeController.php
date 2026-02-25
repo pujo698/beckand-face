@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
@@ -16,6 +17,7 @@ class EmployeeController extends Controller
      */
     public function profile()
     {
+        /** @var User $user */
         $user = Auth::user();
 
         $attendanceToday = $user->attendanceLogs()
@@ -44,6 +46,7 @@ class EmployeeController extends Controller
      */
     public function updateProfile(Request $request)
     {
+        /** @var User $user */
         $user = Auth::user();
 
         $request->validate([
@@ -87,6 +90,7 @@ class EmployeeController extends Controller
     public function monthlyStats(Request $request)
     {
         // Ambil user yang login, kalau tidak ada, fallback ke user pertama (untuk route public/testing)
+        /** @var User|null $user */
         $user = Auth::user() ?? \App\Models\User::first();
 
         if (!$user) {

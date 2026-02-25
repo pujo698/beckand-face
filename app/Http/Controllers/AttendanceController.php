@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\AttendanceLog;
 use App\Models\OnDutyAuthorization;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use App\Traits\Haversine;
@@ -24,6 +26,7 @@ class AttendanceController extends Controller
             'longitude' => 'required|numeric',
         ]);
 
+        /** @var User $user */
         $user = Auth::user();
         $today = Carbon::today()->toDateString();
         $todayCarbon = Carbon::today();
@@ -143,6 +146,7 @@ class AttendanceController extends Controller
 
     public function checkOut(Request $request)
     {
+        /** @var User $user */
         $user = Auth::user();
         $today = Carbon::today()->toDateString();
         $todayCarbon = Carbon::today();
@@ -201,7 +205,7 @@ class AttendanceController extends Controller
                  $endDate = Carbon::parse($request->end_date)->endOfDay();
                  $query->whereBetween('check_in', [$startDate, $endDate]);
             } catch (\Exception $e) {
-                 \Log::warning('Format tanggal filter logs salah: ' . $e->getMessage());
+                 Log::warning('Format tanggal filter logs salah: ' . $e->getMessage());
             }
         }
 
@@ -219,7 +223,10 @@ class AttendanceController extends Controller
             'year'  => 'required|integer',
         ]);
 
-        return Auth::user()->attendanceLogs()
+        /** @var User $user */
+        $user = Auth::user();
+
+        return $user->attendanceLogs()
             ->whereMonth('check_in', $request->month)
             ->whereYear('check_in', $request->year)
             ->orderBy('check_in', 'asc')
@@ -235,6 +242,7 @@ class AttendanceController extends Controller
             'year'  => 'required|integer',
         ]);
 
+        /** @var User $user */
         $user = Auth::user();
         $month = $request->month;
         $year = $request->year;
